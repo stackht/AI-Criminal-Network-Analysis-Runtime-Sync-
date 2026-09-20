@@ -1,11 +1,13 @@
 /**
  * PROTOTYPE — Evidence Explorer.
+ * Table + inspector workstation. Selecting a row opens the inspector with
+ * chain metadata; the integrity modal remains available per record.
  */
 import { useMemo, useState } from "react";
-import { Search, Fingerprint, FileSearch } from "lucide-react";
+import { Search, Fingerprint } from "lucide-react";
 import { evidence, formatTimestamp, integritySummary, chainRecords, evidenceById } from "../data";
 import { useProtoStore } from "../store";
-import { EntityRef, Tag, Kicker } from "../components";
+import { EntityRef, Tag } from "../components";
 import { ModalHost } from "./shared";
 
 const KINDS = ["ALL", "FIR", "CDR", "TRANSACTION", "SURVEILLANCE", "LOCATION", "DOCUMENT", "VEHICLE"] as const;
@@ -13,6 +15,7 @@ const KINDS = ["ALL", "FIR", "CDR", "TRANSACTION", "SURVEILLANCE", "LOCATION", "
 export function Evidence() {
   const [kind, setKind] = useState<(typeof KINDS)[number]>("ALL");
   const [q, setQ] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const setIntegrityModal = useProtoStore((s) => s.setIntegrityModal);
   const integrityModal = useProtoStore((s) => s.integrityModal);
 
@@ -25,69 +28,105 @@ export function Evidence() {
     );
   }, [kind, q]);
 
+  const selected = selectedId ? evidenceById.get(selectedId) : undefined;
   const modalEvidence = integrityModal ? evidenceById.get(integrityModal) : undefined;
 
   return (
-    <div className="pt-stack">
-      <div className="pt-pagehead">
-        <div>
-          <Kicker>EVIDENCE EXPLORER</Kicker>
-          <h1 className="pt-title">Evidence Intake</h1>
-          <div className="pt-meta">
-            <span className="pt-num">{evidence.length}</span> records · <span className="pt-num">{integritySummary.evidence_verified}</span> hash-verified · {integritySummary.mismatches} open discrepancy
+    <div className="pt-ev-layout">
+      <div className="pt-ev-left">
+        <div className="pt-band" style={{ padding: "0 0 12px", marginBottom: 12 }}>
+          <div>
+            <div className="pt-case-id">{rows.length} RECORDS · {integritySummary.evidence_verified} HASH-VERIFIED</div>
+            <h1 style={{ fontSize: 22 }}>Evidence Explorer</h1>
+          </div>
+          <div className="pt-search">
+            <Search size={13} style={{ color: "var(--pt-faint)" }} />
+            <input placeholder="Search EVID IDs, sources, titles…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search evidence" />
           </div>
         </div>
-        <div className="pt-search">
-          <Search size={13} style={{ color: "var(--pt-faint)" }} />
-          <input placeholder="Search EVID IDs, sources, titles…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search evidence" />
-        </div>
-      </div>
 
-      <div className="pt-ev-filters">
-        {KINDS.map((k) => (
-          <button key={k} type="button" className={`pt-filter-item ${kind === k ? "on" : ""}`} onClick={() => setKind(k)} style={{ height: 28, padding: "0 12px", fontSize: 10.5 }}>
-            {k === "ALL" ? "ALL TYPES" : k}
-          </button>
-        ))}
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="pt-panel" style={{ padding: 44, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <FileSearch size={22} style={{ color: "var(--pt-faint)" }} />
-          <p className="pt-muted">No evidence records match the current filters.</p>
-        </div>
-      ) : (
-        <div className="pt-ev-grid">
-          {rows.map((e) => (
-            <div
-              key={e.id}
-              role="button"
-              tabIndex={0}
-              className="pt-ev-card"
-              onClick={() => setIntegrityModal(e.id)}
-              onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { setIntegrityModal(e.id); ev.preventDefault(); } }}
-              style={{ cursor: "pointer", textAlign: "left", color: "inherit", background: "linear-gradient(180deg, rgba(19,25,34,0.82), rgba(13,17,23,0.94))" }}
-            >
-              <div className="pt-flex" style={{ justifyContent: "space-between" }}>
-                <Tag tone="green">{e.kind}</Tag>
-                <span className="pt-mono" style={{ color: "var(--pt-faint)" }}>{e.id}</span>
-              </div>
-              <div className="pt-ev-title">{e.title}</div>
-              <div className="pt-ev-meta">
-                <span>{formatTimestamp(e.timestamp)}</span>
-                <span>{e.source}</span>
-              </div>
-              <div className="pt-ev-entities">
-                {e.entities.map((id) => <EntityRef key={id} id={id} />)}
-              </div>
-              <div className="pt-integrity-strip">
-                <Fingerprint size={11} />
-                {e.integrity.verified ? `SHA-256 · BATCH ${e.integrity.merkle} VERIFIED` : "OPEN — RE-CAPTURE REQUIRED"}
-              </div>
-            </div>
+        <div className="pt-ev-filters">
+          {KINDS.map((k) => (
+            <button key={k} type="button" className={`pt-filter-item ${kind === k ? "on" : ""}`} onClick={() => setKind(k)} style={{ height: 26, padding: "0 10px", fontSize: 10 }}>
+              {k === "ALL" ? "ALL TYPES" : k}
+            </button>
           ))}
         </div>
-      )}
+
+        <div style={{ flex: 1, minHeight: 0, border: "1px solid var(--pt-border)", borderRadius: 4, overflow: "auto" }}>
+          <table className="pt-table">
+            <thead>
+              <tr>
+                <th style={{ width: 130 }}>ID</th>
+                <th>TYPE</th>
+                <th>TITLE</th>
+                <th style={{ width: 130 }}>WHEN</th>
+                <th>ENTITIES</th>
+                <th style={{ width: 150 }}>SOURCE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr><td colSpan={6} className="pt-faint" style={{ padding: 24, whiteSpace: "normal" }}>No records match the current filters.</td></tr>
+              )}
+              {rows.map((e) => (
+                <tr key={e.id} className={selectedId === e.id ? "sel" : ""} onClick={() => setSelectedId(e.id)} style={{ cursor: "pointer" }}>
+                  <td className="pt-mono" style={{ color: "var(--pt-cyan)" }}>{e.id}</td>
+                  <td><Tag tone={e.integrity.verified ? "green" : "amber"}>{e.kind}</Tag></td>
+                  <td style={{ color: "var(--pt-text)", whiteSpace: "normal", minWidth: 200, lineHeight: 1.35 }}>{e.title}</td>
+                  <td className="pt-mono" style={{ color: "var(--pt-faint)" }}>{formatTimestamp(e.timestamp).slice(0, 16)}</td>
+                  <td className="pt-mono" style={{ color: "var(--pt-muted)" }}>{e.entities.slice(0, 2).join(", ")}{e.entities.length > 2 ? ` +${e.entities.length - 2}` : ""}</td>
+                  <td style={{ color: "var(--pt-faint)" }}>{e.source}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="pt-ev-inspector">
+        {selected ? (
+          <>
+            <div className="pt-section-head"><span>Record inspector</span><span className="pt-mono" style={{ fontWeight: 400 }}>{selected.id}</span></div>
+            <div className="pt-flex">
+              <Tag tone={selected.integrity.verified ? "green" : "amber"}>{selected.kind}</Tag>
+              <Tag>SHA-256 · BATCH {selected.integrity.merkle}</Tag>
+            </div>
+            <h2 className="pt-entity-title" style={{ fontSize: 16 }}>{selected.title}</h2>
+            <p className="pt-muted" style={{ fontSize: 12, margin: "2px 0" }}>{selected.source}</p>
+            <p className="pt-faint pt-mono" style={{ fontSize: 10.5 }}>{formatTimestamp(selected.timestamp)}</p>
+
+            <div className="pt-hr" />
+            <div className="pt-section-head"><span>Related entities</span></div>
+            <div className="pt-flex">
+              {selected.entities.map((id) => <EntityRef key={id} id={id} />)}
+            </div>
+
+            <div className="pt-hr" />
+            <div className="pt-section-head"><span>Integrity</span></div>
+            <div className="pt-context-row"><span className="k">SHA-256</span><span className="pt-mono v" style={{ color: "var(--pt-cyan)", fontSize: 10.5 }}>{selected.integrity.sha256.slice(0, 20)}…</span></div>
+            <div className="pt-context-row"><span className="k">MERKLE BATCH</span><span className="pt-num v">{selected.integrity.merkle}</span></div>
+            <div className="pt-context-row"><span className="k">STATUS</span><span className="v" style={{ color: selected.integrity.verified ? "var(--pt-green)" : "var(--pt-amber)" }}>{selected.integrity.verified ? "VERIFIED" : "OPEN"}</span></div>
+
+            <button className="pt-btn" style={{ alignSelf: "flex-start", height: 28, fontSize: 10.5 }} onClick={() => setIntegrityModal(selected.id)}>
+              <Fingerprint size={12} /> OPEN CHAIN RECORD
+            </button>
+
+            <div className="pt-hr" />
+            <div className="pt-section-head"><span>Recent chain reads</span></div>
+            {chainRecords.slice(-2).map((c) => (
+              <div key={c.id} className="pt-context-row">
+                <span className="k">{c.id} · {c.operation}</span>
+                <span className="pt-mono v" style={{ color: "var(--pt-faint)", fontSize: 10 }}>{c.current}</span>
+              </div>
+            ))}
+          </>
+        ) : (
+          <div className="pt-faint" style={{ fontSize: 12, lineHeight: 1.6 }}>
+            Select a record to inspect its source, related entities and integrity metadata.
+          </div>
+        )}
+      </div>
 
       {modalEvidence && (
         <ModalHost onClose={() => setIntegrityModal(null)}>
@@ -100,19 +139,9 @@ export function Evidence() {
           <div className="pt-modal-row"><span>MERKLE BATCH</span><b>{modalEvidence.integrity.merkle} · VERIFIED</b></div>
           <div className="pt-modal-row"><span>STATUS</span><b style={{ color: modalEvidence.integrity.verified ? "var(--pt-green)" : "var(--pt-amber)" }}>{modalEvidence.integrity.verified ? "VERIFIED" : "OPEN"}</b></div>
           <div className="pt-divider" />
-          <div className="pt-hud-kicker">RELATED ENTITIES</div>
+          <div className="pt-section-head" style={{ textTransform: "none" }}>RELATED ENTITIES</div>
           <div className="pt-flex">
             {modalEvidence.entities.map((id) => <EntityRef key={id} id={id} />)}
-          </div>
-          <div className="pt-divider" />
-          <div className="pt-hud-kicker">RECENT CHAIN READS</div>
-          <div className="pt-stack" style={{ gap: 5 }}>
-            {chainRecords.slice(-2).map((c) => (
-              <div key={c.id} className="pt-mono" style={{ fontSize: 10, color: "var(--pt-muted)", display: "flex", justifyContent: "space-between" }}>
-                <span>{c.id} · {c.operation}</span>
-                <span className="hash" style={{ color: "var(--pt-cyan)" }}>{c.current}</span>
-              </div>
-            ))}
           </div>
         </ModalHost>
       )}

@@ -3,7 +3,7 @@
  */
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, MapPin, Fingerprint, Clock3, Landmark, MessagesSquare, ShieldOff } from "lucide-react";
+import { ArrowLeft, Landmark, MessagesSquare } from "lucide-react";
 import { entityById, evidence, timeline, relationships, neighborsOf, caseLocations, degreeOf, entityTypeLabel, formatTimestamp, type ProtoEntity } from "../data";
 import { useProtoStore, focusEntityOnMap } from "../store";
 import { EntityGlyph, Tag, Kicker, EntityRef } from "../components";
@@ -207,11 +207,15 @@ export function EntityDossier() {
                 <div className="pt-tl">
                   {things.tim.map((t) => (
                     <div key={t.id} className="pt-tl-item">
-                      <div className="pt-tl-stamp">{formatTimestamp(t.timestamp)}</div>
-                      <div className="pt-tl-type">{t.type.replace(/_/g, " ")}</div>
-                      <div className="pt-tl-desc">{t.description}</div>
-                      <div className="pt-tl-subs">
-                        {t.evidenceId && <Tag tone="green">{t.evidenceId}</Tag>}
+                      <div className="pt-tl-stamp">{formatTimestamp(t.timestamp).slice(0, 16)}</div>
+                      <div className="pt-tl-main">
+                        <div className="pt-tl-type">{t.type.replace(/_/g, " ")}</div>
+                        <div className="pt-tl-desc">{t.description}</div>
+                        <div className="pt-tl-subs">
+                          {t.evidenceId && <Tag tone="green">{t.evidenceId}</Tag>}
+                        </div>
+                      </div>
+                      <div style={{ alignSelf: "start", display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {t.entityIds.filter((eid) => eid !== entity.id).map((eid) => <EntityRef key={eid} id={eid} />)}
                       </div>
                     </div>
@@ -226,24 +230,26 @@ export function EntityDossier() {
           {tab === "LOCATIONS" && (
             <div className="pt-stack">
               {things.locs.length ? (
-                <div className="pt-ev-grid">
-                  {things.locs.map((l) => (
-                    <div key={l.id} className="pt-ev-card">
-                      <div className="pt-flex">
-                        <Tag tone="cyan"><MapPin size={10} /> GEONODE</Tag>
-                        <span className="pt-mono" style={{ color: "var(--pt-faint)" }}>{l.id}</span>
-                      </div>
-                      <div className="pt-ev-title">{l.name}</div>
-                      <div className="pt-ev-meta">
-                        <span>LAT {l.latitude.toFixed(4)} · LNG {l.longitude.toFixed(4)}</span>
-                        <span>IMPORTANCE {Math.round(l.importance * 100)}%</span>
-                      </div>
-                      <button className="pt-btn pt-btn-primary" style={{ height: 28, fontSize: 10, marginTop: 12 }} onClick={() => focusEntityOnMap(entity.id)}>
-                        POSITION ON GLOBE
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <table className="pt-table">
+                  <thead>
+                    <tr><th>GEONODE</th><th>NAME</th><th>COORDINATES</th><th>IMPORTANCE</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {things.locs.map((l) => (
+                      <tr key={l.id}>
+                        <td className="pt-mono" style={{ color: "var(--pt-faint)" }}>{l.id}</td>
+                        <td style={{ color: "var(--pt-text)" }}>{l.name}</td>
+                        <td className="pt-mono" style={{ color: "var(--pt-muted)" }}>{l.latitude.toFixed(4)}, {l.longitude.toFixed(4)}</td>
+                        <td className="pt-num" style={{ color: "var(--pt-muted)" }}>{Math.round(l.importance * 100)}%</td>
+                        <td>
+                          <button className="pt-btn pt-btn-primary" style={{ height: 24, fontSize: 9.5, padding: "0 8px" }} onClick={() => focusEntityOnMap(entity.id)}>
+                            POSITION ON GLOBE
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <p className="pt-muted">No geolocation records linked.</p>
               )}
@@ -253,22 +259,22 @@ export function EntityDossier() {
           {tab === "EVIDENCE" && (
             <div className="pt-stack">
               {things.evs.length ? (
-                <div className="pt-ev-grid">
-                  {things.evs.map((e) => (
-                    <div key={e.id} className="pt-ev-card">
-                      <div className="pt-flex">
-                        <Tag tone="green">{e.kind}</Tag>
-                        <span className="pt-mono" style={{ color: "var(--pt-faint)" }}>{e.id}</span>
-                      </div>
-                      <div className="pt-ev-title">{e.title}</div>
-                      <div className="pt-ev-meta">
-                        <span>{formatTimestamp(e.timestamp)}</span>
-                        <span>{e.source}</span>
-                      </div>
-                      <div className="pt-integrity-strip"><Fingerprint size={11} /> SHA-256 VERIFIED</div>
-                    </div>
-                  ))}
-                </div>
+                <table className="pt-table">
+                  <thead>
+                    <tr><th>ID</th><th>TYPE</th><th>RECORD</th><th>WHEN</th><th>SOURCE</th></tr>
+                  </thead>
+                  <tbody>
+                    {things.evs.map((e) => (
+                      <tr key={e.id}>
+                        <td className="pt-mono" style={{ color: "var(--pt-cyan)" }}>{e.id}</td>
+                        <td><Tag tone="green">{e.kind}</Tag></td>
+                        <td style={{ color: "var(--pt-text)" }}>{e.title}</td>
+                        <td className="pt-mono" style={{ color: "var(--pt-faint)" }}>{formatTimestamp(e.timestamp).slice(0, 16)}</td>
+                        <td style={{ color: "var(--pt-faint)" }}>{e.source}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <p className="pt-muted">No evidence records linked.</p>
               )}

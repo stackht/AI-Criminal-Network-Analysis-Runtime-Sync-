@@ -1,179 +1,189 @@
 /**
- * PROTOTYPE — Overview / Case Intelligence (dashboard).
+ * PROTOTYPE — Overview / Case Intelligence workspace.
+ * Analytical layout: case band, metric table, network-structure visual,
+ * signals inspector, recent activity. No card grids.
  */
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, ListFilter, Crosshair, AlertTriangle, ShieldCheck, GitBranch, Scale } from "lucide-react";
-import { caseMeta, netCounts, potentialLinks, anomalies, entityById, evidenceGaps, integritySummary } from "../data";
-import { CountUp, Sparkline, Tag, Kicker, Panel } from "../components";
+import { ArrowRight, ShieldCheck, AlertTriangle } from "lucide-react";
+import { caseMeta, netCounts, potentialLinks, anomalies, entityById, evidenceGaps, integritySummary, timeline, formatTimestamp } from "../data";
+import { CountUp, Tag } from "../components";
 import { useProtoStore } from "../store";
 import { DecisionFlowModal } from "./shared";
+import { communityColor, communityMembership } from "../graph";
 
-const spark = [3, 5, 6, 8, 12, 16, 22, 28, 35, 47];
-const sparkR = [12, 18, 26, 34, 47, 61, 78, 95, 108, 126];
-const sparkE = [2, 4, 5, 7, 9, 11, 13, 15, 17, 18];
+function NetworkStructureVisual() {
+  const W = 420;
+  const H = 240;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 88;
+  const clusters = Array.from({ length: netCounts.communities }, (_, i) => i + 1);
+  const counts = clusters.map((c) => communityMembership(c));
+  const dots = clusters.map((c, i) => {
+    const a = (i / netCounts.communities) * Math.PI * 2 - Math.PI / 2;
+    return { x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R, c };
+  });
+  return (
+    <div className="pt-vis" style={{ width: "100%" }}>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Network structure by community">
+        {dots.map((d) => (
+          <line key={`l${d.c}`} x1={cx} y1={cy} x2={d.x} y2={d.y} stroke="rgba(255,255,255,0.12)" />
+        ))}
+        <circle cx={cx} cy={cy} r={8} fill="var(--pt-cyan)" />
+        <text x={cx} y={cy + 3} textAnchor="middle" fontSize={7} fill="#061218" style={{ fontFamily: "'IBM Plex Mono',monospace", pointerEvents: "none" }}>HUB</text>
+        {dots.map((d) => (
+          <g key={`g${d.c}`}>
+            <circle cx={d.x} cy={d.y} r={7 + Math.min(14, counts[d.c - 1] * 0.9)} fill={communityColor(d.c)} opacity={0.9} />
+            <circle cx={d.x} cy={d.y} r={10 + Math.min(14, counts[d.c - 1] * 0.9)} fill="none" stroke={communityColor(d.c)} opacity={0.35} />
+            <text x={d.x} y={d.y + 3} textAnchor="middle" fontSize={8} fill="#090b0e" style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600, pointerEvents: "none" }}>{counts[d.c - 1]}</text>
+            <text x={d.x} y={d.y + 22} textAnchor="middle" fontSize={8} fill="var(--pt-faint)" style={{ fontFamily: "'IBM Plex Mono',monospace", pointerEvents: "none" }}>C{d.c}</text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
 
 export function Overview() {
   const setView = useProtoStore((s) => s.setView);
   const [openDecision, setOpenDecision] = useState(false);
   const top = potentialLinks[0];
-
-  const stats = [
-    { label: "NETWORK ENTITIES", value: netCounts.entities, sub: "+8 newly identified", points: spark },
-    { label: "RELATIONSHIPS", value: netCounts.relationships, sub: "6 communities mapped", points: sparkR },
-    { label: "EVIDENCE SOURCES", value: netCounts.evidence, sub: `${integritySummary.evidence_verified} hash-verified`, points: sparkE },
-    { label: "POTENTIAL LINKS", value: netCounts.potentialLinks, sub: "2 emerging relationships", points: [0, 1, 1, 2, 3, 3, 4, 5, 6, 7] },
-    { label: "ANOMALIES", value: netCounts.anomalies, sub: "1 high-severity pattern", points: [0, 1, 1, 2, 2, 3, 3, 3, 4, 4] },
-  ];
-
-  const intelligence = [
-    { label: "NETWORK STRUCTURE", value: `${netCounts.communities} communities detected`, icon: <GitBranch size={13} /> },
-    { label: "BRIDGE ENTITIES", value: "ENT-0192 · ENT-0211 · ENT-0187", icon: <Crosshair size={13} /> },
-    { label: "TEMPORAL SIGNAL", value: "2 emerging relationships (18–20 AUG)", icon: <ArrowRight size={13} /> },
-    { label: "ANOMALIES", value: `${netCounts.anomalies} unusual activity patterns`, icon: <AlertTriangle size={13} /> },
-    { label: "EVIDENCE GAPS", value: `${netCounts.gaps} areas requiring verification`, icon: <Scale size={13} /> },
-  ];
+  const recent = timeline.slice(-6);
 
   return (
-    <div className="pt-stack">
-      <div className="pt-pagehead">
+    <div className="pt-stack-lg">
+      <div className="pt-band">
         <div>
-          <Kicker>CASE INTELLIGENCE</Kicker>
-          <h1 className="pt-title">{caseMeta.title}</h1>
-          <div className="pt-meta">
-            <span className="pt-mono">{caseMeta.caseKey}</span> · {caseMeta.classification} · OPENED {caseMeta.opened} · STATUS{" "}
-            <span className="pt-up" style={{ fontWeight: 700 }}>{caseMeta.status}</span>
+          <div className="pt-case-id">{caseMeta.caseKey} · {caseMeta.classification} · OPENED {caseMeta.opened} · {caseMeta.owner}</div>
+          <h1>{caseMeta.title}</h1>
+          <div className="pt-band-meta">Case Intelligence · Operation overview</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ textAlign: "right" }}>
+            <div className="pt-panel-sub" style={{ justifyContent: "flex-end", color: "var(--pt-green)", fontWeight: 600 }}>ACTIVE INVESTIGATION</div>
+            <div className="pt-meta" style={{ marginTop: 3 }}>Updated 20 AUG 2026</div>
+          </div>
+          <div className="pt-actions">
+            <button className="pt-btn pt-btn-primary" onClick={() => setView("command-centre")}>
+              COMMAND CENTRE <ArrowRight size={13} />
+            </button>
+            <button className="pt-btn" onClick={() => setView("network")}>NETWORK INTELLIGENCE</button>
           </div>
         </div>
-        <div className="pt-actions">
-          <button className="pt-btn pt-btn-primary" onClick={() => setView("command-centre")}>
-            ENTER 3D COMMAND CENTRE <ArrowRight size={14} />
-          </button>
-          <button className="pt-btn pt-btn-violet" onClick={() => setView("network")}>
-            <ListFilter size={14} /> NETWORK INTELLIGENCE
-          </button>
-        </div>
       </div>
 
-      <div className="pt-ov-grid">
-        {stats.map((s, i) => (
-          <motion.div
-            key={s.label}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 * i, duration: 0.4 }}
-          >
-            <Panel className="pt-panel-hover">
-              <div className="pt-section-gap" style={{ margin: 0 }} />
-              <div className="pt-panel-title">{s.label}</div>
-              <div className="pt-panel-value" style={{ color: "var(--pt-cyan)" }}>
-                <CountUp value={s.value} />
-              </div>
-              <div className="pt-panel-sub">
-                {s.label === "ANOMALIES" ? <span className="pt-warn">▲</span> : <span className="pt-up">▲</span>}
-                <span>{s.sub}</span>
-              </div>
-              <div className="pt-divider" />
-              <Sparkline points={s.points} className="" />
-            </Panel>
-          </motion.div>
-        ))}
-      </div>
+      <div className="pt-split-6535">
+        <div className="pt-stack-lg">
+          <section className="pt-section">
+            <h2 className="pt-section-head">CASE ACTIVITY</h2>
+            <table className="pt-metrics">
+              <thead>
+                <tr>
+                  <th style={{ width: "42%" }}>LABEL</th>
+                  <th style={{ width: "14%" }}>VALUE</th>
+                  <th>CONTEXT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: "Entity records", value: netCounts.entities, ctx: "+8 newly identified" },
+                  { label: "Relationships", value: netCounts.relationships, ctx: "across 6 communities" },
+                  { label: "Evidence sources", value: netCounts.evidence, ctx: `${integritySummary.evidence_verified} hash-verified` },
+                  { label: "Potential links", value: netCounts.potentialLinks, ctx: "2 emerging relationships" },
+                  { label: "Anomalies", value: netCounts.anomalies, ctx: "1 high-severity pattern" },
+                ].map((row) => (
+                  <tr key={row.label}>
+                    <td className="c-label">{row.label}</td>
+                    <td className="c-value"><b className="pt-num"><CountUp value={row.value} /></b></td>
+                    <td style={{ color: "var(--pt-faint)", fontSize: 12 }}>{row.ctx}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
 
-      <div className="pt-ov-row">
-        <div className="pt-ov-left">
-          <Panel>
-            <div className="pt-hud-kicker">INTELLIGENCE SUMMARY</div>
-            <div>
-              {intelligence.map((row) => (
-                <div key={row.label} className="pt-dna-row">
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--pt-faint)", font: "600 10px/1 'IBM Plex Mono',monospace", letterSpacing: "0.14em" }}>
-                    {row.icon}
-                    {row.label}
-                  </span>
-                  <b style={{ fontSize: 12 }}>{row.value}</b>
-                </div>
-              ))}
+          <section className="pt-section">
+            <div className="pt-section-head">
+              <span>Network structure</span>
+              <span style={{ fontWeight: 400 }}>{netCounts.communities} communities · bridge at ENT-0192</span>
             </div>
-          </Panel>
+            <NetworkStructureVisual />
+          </section>
 
-          <Panel>
-            <div className="pt-hud-kicker">ACTIVE ANOMALIES</div>
-            <div className="pt-stack" style={{ gap: 8 }}>
-              {anomalies.map((a) => (
-                <div key={a.id} className="pt-event-item" style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
-                  <Tag tone={a.severity === "HIGH" ? "rose" : "amber"}>{a.severity}</Tag>
-                  <span style={{ color: "var(--pt-text)", fontSize: 12.5 }}>{a.title}</span>
-                  <span className="pt-conf" style={{ marginLeft: "auto" }}>{a.score}</span>
-                </div>
-              ))}
-            </div>
-          </Panel>
+          <section className="pt-section">
+            <h2 className="pt-section-head">Recent case activity</h2>
+            <table className="pt-table">
+              <thead>
+                <tr>
+                  <th>WHEN</th><th>EVENT</th><th>TYPE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((ev) => (
+                  <tr key={ev.id}>
+                    <td className="pt-mono" style={{ color: "var(--pt-faint)" }}>{formatTimestamp(ev.timestamp).slice(0, 16)}</td>
+                    <td style={{ color: "var(--pt-text)" }}>{ev.description}</td>
+                    <td className="pt-mono" style={{ color: "var(--pt-muted)" }}>{ev.type.replace(/_/g, " ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
         </div>
 
-        <div className="pt-ov-right">
-          <Panel className="pt-panel-hover" style={{ borderColor: "rgba(155,140,255,0.4)" }}>
-            <div className="pt-hud-kicker" style={{ justifyContent: "space-between" }}>
-              <span>ACTIVE ANALYTICAL SIGNAL</span>
-              <Tag tone="violet">PLINK-01</Tag>
+        <div className="pt-inspector">
+          <section className="pt-section">
+            <div className="pt-section-head"><span>Investigative signals</span><Tag tone="violet">PLINK-01</Tag></div>
+            <div style={{ padding: "10px 0", borderBottom: "1px solid var(--pt-border)" }}>
+              <div className="pt-entity-title" style={{ fontSize: 14 }}>{entityById.get(top.source)?.name}</div>
+              <div className="pt-mono" style={{ color: "var(--pt-faint)", fontSize: 10, margin: "4px 0" }}>via {entityById.get(top.via)?.name}</div>
+              <div className="pt-entity-title" style={{ fontSize: 14 }}>{entityById.get(top.target)?.name}</div>
+              <div className="pt-flex" style={{ marginTop: 10 }}>
+                <Tag tone="violet">CONFIDENCE {Math.round(top.confidence * 100)}%</Tag>
+                <Tag>REQUIRES ANALYST VALIDATION</Tag>
+              </div>
+              <div className="pt-actions" style={{ marginTop: 10 }}>
+                <button className="pt-btn pt-btn-violet" style={{ height: 28, fontSize: 10.5 }} onClick={() => setOpenDecision(true)}>REVIEW &amp; DECIDE</button>
+                <button className="pt-btn pt-btn-ghost" style={{ height: 28, fontSize: 10.5 }} onClick={() => setView("network")}>IN NETWORK</button>
+              </div>
             </div>
-            <div className="pt-entity-title" style={{ fontSize: 15 }}>
-              {entityById.get(top.source)?.name}
-            </div>
-            <div style={{ color: "var(--pt-faint)", font: "500 11px/1 'IBM Plex Mono',monospace", margin: "6px 0" }}>↓ {entityById.get(top.via)?.name}</div>
-            <div className="pt-entity-title" style={{ fontSize: 15 }}>
-              {entityById.get(top.target)?.name}
-            </div>
-            <div className="pt-flex" style={{ marginTop: 12 }}>
-              <Tag tone="violet">CONFIDENCE {Math.round(top.confidence * 100)}%</Tag>
-              <Tag>INVESTIGATIVE SIGNAL</Tag>
-              <Tag>REQUIRES ANALYST VALIDATION</Tag>
-            </div>
-            <div className="pt-actions" style={{ marginTop: 14 }}>
-              <button className="pt-btn pt-btn-violet" onClick={() => setOpenDecision(true)}>
-                <Crosshair size={13} /> REVIEW &amp; DECIDE
-              </button>
-              <button className="pt-btn" onClick={() => setView("network")}>
-                VIEW IN NETWORK <ArrowRight size={13} />
-              </button>
-            </div>
-          </Panel>
+          </section>
 
-          <Panel>
-            <div className="pt-hud-kicker">EVIDENCE INTEGRITY</div>
-            <div className="pt-dna-row">
-              <span>CHAIN STATUS</span>
-              <b style={{ color: "var(--pt-green)" }}><ShieldCheck size={12} style={{ verticalAlign: -2 }} /> {integritySummary.chain_status}</b>
-            </div>
-            <div className="pt-dna-row"><span>SOURCES REGISTERED</span><b className="pt-num">{integritySummary.evidence_registered}</b></div>
-            <div className="pt-dna-row"><span>HASH-VERIFIED</span><b className="pt-num">{integritySummary.evidence_verified}</b></div>
-            <div className="pt-dna-row"><span>MISMATCHES</span><b className="pt-num" style={{ color: integritySummary.mismatches ? "var(--pt-amber)" : "var(--pt-text)" }}>{integritySummary.mismatches}</b></div>
-            <div className="pt-dna-row"><span>AUDIT TRAIL</span><b style={{ color: "var(--pt-green)" }}>ACTIVE</b></div>
-            <p className="pt-muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.6 }}>
-              Cryptographic integrity verifies that records are unmodified — it does not prove any relationship is true.
+          <section className="pt-section">
+            <h2 className="pt-section-head">Active anomalies</h2>
+            {anomalies.map((a) => (
+              <div key={a.id} className="pt-context-row">
+                <span className="k">{a.severity === "HIGH" ? "HIGH" : "MED"} · {a.id}</span>
+                <span className="v">{a.score}</span>
+              </div>
+            ))}
+          </section>
+
+          <section className="pt-section">
+            <h2 className="pt-section-head">Evidence gaps · {evidenceGaps.length} unresolved</h2>
+            {evidenceGaps.map((g) => (
+              <div key={g.id} className="pt-context-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+                <span className="k" style={{ color: g.priority === "HIGH" ? "var(--pt-amber)" : "var(--pt-faint)" }}>{g.priority} · {g.id}</span>
+                <span className="v" style={{ textAlign: "left", fontSize: 11.5 }}>{g.missing}</span>
+              </div>
+            ))}
+          </section>
+
+          <section className="pt-section">
+            <h2 className="pt-section-head">Evidence integrity</h2>
+            <div className="pt-context-row"><span className="k">CHAIN</span><span className="v" style={{ color: "var(--pt-green)" }}><ShieldCheck size={11} style={{ verticalAlign: -1 }} /> {integritySummary.chain_status}</span></div>
+            <div className="pt-context-row"><span className="k">HASH-VERIFIED</span><span className="pt-num v">{integritySummary.evidence_verified}</span></div>
+            <div className="pt-context-row"><span className="k">AUDIT TRAIL</span><span className="v" style={{ color: "var(--pt-green)" }}>ACTIVE</span></div>
+            <p className="pt-faint" style={{ fontSize: 11, margin: "10px 0 0", lineHeight: 1.6 }}>
+              Integrity verifies records are unmodified — it does not prove any relationship is true.
             </p>
-            <button className="pt-btn pt-btn-ghost" style={{ marginTop: 6 }} onClick={() => setView("integrity")}>
-              OPEN INTEGRITY LEDGER <ArrowRight size={13} />
-            </button>
-          </Panel>
+            <button className="pt-btn pt-btn-ghost" style={{ marginTop: 6, height: 26, fontSize: 10.5 }} onClick={() => setView("integrity")}>OPEN INTEGRITY LEDGER</button>
+          </section>
 
-          <Panel>
-            <div className="pt-hud-kicker">EVIDENCE GAPS — {evidenceGaps.length} UNRESOLVED</div>
-            <div className="pt-stack" style={{ gap: 8 }}>
-              {evidenceGaps.slice(0, 2).map((g) => (
-                <div key={g.id} className="pt-event-item">
-                  <div className="pt-flex">
-                    <Tag tone={g.priority === "HIGH" ? "rose" : "amber"}>{g.priority} PRIORITY</Tag>
-                    <span className="pt-mono" style={{ color: "var(--pt-faint)" }}>{g.id}</span>
-                  </div>
-                  <div style={{ color: "var(--pt-text)", fontSize: 12, marginTop: 6 }}>{g.missing}</div>
-                </div>
-              ))}
-            </div>
-            <button className="pt-btn" style={{ marginTop: 12 }} onClick={() => setView("timeline")}>
-              <AlertTriangle size={13} /> INVESTIGATE
-            </button>
-          </Panel>
+          <button className="pt-btn" onClick={() => setView("timeline")} style={{ alignSelf: "flex-start" }}>
+            <AlertTriangle size={13} /> INVESTIGATE TIMELINE
+          </button>
         </div>
       </div>
 

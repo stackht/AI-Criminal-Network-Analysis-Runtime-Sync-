@@ -87,29 +87,24 @@ export function Integrity() {
       </div>
 
       <div className="pt-panel" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "14px 18px 10px" }}>
-          <div className="pt-hud-kicker">REGISTERED EVIDENCE</div>
+        <div style={{ padding: "14px 16px 8px" }}>
+          <div className="pt-hud-kicker" style={{ marginBottom: 0 }}>REGISTERED EVIDENCE</div>
         </div>
-        <div className="pt-ev-grid" style={{ padding: "0 18px 18px", gridTemplateColumns: "repeat(4, minmax(0,1fr))" }}>
-          {evidence.slice(0, 8).map((e) => (
-            <div
-          key={e.id}
-          role="button"
-          tabIndex={0}
-          className="pt-ev-card"
-          onClick={() => setIntegrityModal(e.id)}
-          onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { setIntegrityModal(e.id); ev.preventDefault(); } }}
-          style={{ cursor: "pointer", textAlign: "left", color: "inherit" }}
-        >
-              <div className="pt-flex" style={{ justifyContent: "space-between" }}>
-                <Tag tone={e.integrity.verified ? "green" : "amber"}>{e.kind}</Tag>
-                <span className="pt-mono" style={{ color: "var(--pt-faint)" }}>{e.id}</span>
-              </div>
-              <div className="pt-ev-title" style={{ fontSize: 12 }}>{e.title}</div>
-              <div className="pt-integrity-strip"><ShieldCheck size={10} /> {e.integrity.verified ? "VERIFIED" : "OPEN"}</div>
-            </div>
-          ))}
-        </div>
+        <table className="pt-table">
+          <thead>
+            <tr><th>ID</th><th>TYPE</th><th>RECORD</th><th>STATUS</th></tr>
+          </thead>
+          <tbody>
+            {evidence.slice(0, 8).map((e) => (
+              <tr key={e.id} role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={() => setIntegrityModal(e.id)} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { setIntegrityModal(e.id); ev.preventDefault(); } }}>
+                <td className="pt-mono" style={{ color: "var(--pt-cyan)" }}>{e.id}</td>
+                <td><Tag tone={e.integrity.verified ? "green" : "amber"}>{e.kind}</Tag></td>
+                <td style={{ color: "var(--pt-text)" }}>{e.title}</td>
+                <td style={{ color: e.integrity.verified ? "var(--pt-green)" : "var(--pt-amber)" }}>{e.integrity.verified ? "VERIFIED" : "OPEN"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {modalEvidence && (
