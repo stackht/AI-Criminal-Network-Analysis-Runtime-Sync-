@@ -359,7 +359,7 @@ function addMapLayers(map: MapLibreMap, vectorSource: string) {
   if (!map.getLayer("secret-case-labels")) {
     map.addLayer({
       id: "secret-case-labels", type: "symbol", source: "secret-data", filter: ["==", ["get", "kind"], "case"],
-      layout: { "text-field": "", "text-size": ["interpolate", ["linear"], ["zoom"], 2, 9, 8, 10.5, 14, 12], "text-offset": [0, 2.15], "text-anchor": "top", "text-allow-overlap": true, "text-letter-spacing": 0.04 },
+      layout: { "text-field": "", "text-font": ["Noto Sans Regular"], "text-size": ["interpolate", ["linear"], ["zoom"], 2, 9, 8, 10.5, 14, 12], "text-offset": [0, 2.15], "text-anchor": "top", "text-allow-overlap": true, "text-letter-spacing": 0.04 },
       paint: { "text-color": "#f4fbff", "text-halo-color": "#050b14", "text-halo-width": 2, "text-opacity": 0.98 },
     });
   }
@@ -372,7 +372,7 @@ function addMapLayers(map: MapLibreMap, vectorSource: string) {
   if (!map.getLayer("secret-location-labels")) {
     map.addLayer({
       id: "secret-location-labels", type: "symbol", source: "secret-data", filter: ["==", ["get", "kind"], "location"],
-      layout: { "text-field": ["get", "name"], "text-size": 10, "text-offset": [0, 1.2], "text-anchor": "top", "text-allow-overlap": false },
+      layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 10, "text-offset": [0, 1.2], "text-anchor": "top", "text-allow-overlap": false },
       paint: { "text-color": "#dff8ff", "text-halo-color": "#061326", "text-halo-width": 1.5 },
     });
   }
@@ -590,13 +590,6 @@ function createThreeIntelOverlay(): ThreeIntelOverlay {
       renderer.setClearColor(0x000000, 0);
       camera = new THREE.Camera();
       animationStart = performance.now();
-      map.getCanvas().addEventListener("webglcontextlost", (event) => {
-        event.preventDefault();
-        console.error("[CRIA MAP] THREE.JS FAILURE — WebGL context lost on shared map canvas");
-      }, false);
-      map.getCanvas().addEventListener("webglcontextrestored", () => {
-        console.log("[CRIA MAP] THREE.JS OVERLAY — WebGL context restored");
-      }, false);
     },
     render(gl, input: CustomRenderMethodInput) {
       if (!renderer || !camera || !origin || !meterScale) return;
@@ -688,7 +681,7 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
 
   useEffect(() => {
     if (!hostRef.current) return;
-    const map = new maplibregl.Map({ container: hostRef.current, style: OPENFREEMAP_STYLE, projection: { type: "globe" }, center: INDIA_CENTER, zoom: 3, pitch: 60, bearing: -14, maxPitch: 78, maxZoom: 22, minZoom: 2, pitchWithRotate: true, dragRotate: true, canvasContextAttributes: { antialias: true } } as unknown as maplibregl.MapOptions);
+    const map = new maplibregl.Map({ container: hostRef.current, style: OPENFREEMAP_STYLE, projection: { type: "globe" }, center: INDIA_CENTER, zoom: 3, pitch: 60, bearing: -14, maxPitch: 78, maxZoom: 22, minZoom: 2, pitchWithRotate: true, dragRotate: true, localIdeographFontFamily: "sans-serif", canvasContextAttributes: { antialias: true } } as unknown as maplibregl.MapOptions);
     if (typeof window !== "undefined") {
       // Temporary diagnostic handle for Cloudflare/production debugging.
       (window as unknown as { __criaMap?: MapLibreMap }).__criaMap = map;
@@ -763,6 +756,35 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
       }
       if (!webglAvailable()) reportStatus("degraded");
     });
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      console.error("[CRIA MAP] WEBGL CONTEXT LOST", event);
+      reportStatus("degraded");
+    };
+    const onContextRestored = () => {
+      console.log("[CRIA MAP] WEBGL CONTEXT RESTORED");
+    };
+    const canvas = map.getCanvas();
+    canvas.addEventListener("webglcontextlost", onContextLost);
+    canvas.addEventListener("webglcontextrestored", onContextRestored);
+    map.on("sourcedata", (event: { sourceId?: string; isSourceLoaded?: boolean; sourceDataType?: string }) => {
+      const src = event.sourceId;
+      if (!src || (src !== "openmaptiles" && src !== "openfreemap")) return;
+      console.log("[CRIA MAP SOURCE]", src, "sourceDataType=", event.sourceDataType, "isSourceLoaded=", event.isSourceLoaded);
+      if (event.isSourceLoaded) {
+        if (!vectorTileLoaded) {
+          vectorTileLoaded = true;
+          console.log("[CRIA MAP] VECTOR TILES LOADED");
+        }
+      } else {
+        vectorTileLoaded = false;
+      }
+    });
+    map.on("data", (event: { sourceId?: string; dataType?: string }) => {
+      if (event.sourceId === "openmaptiles" || event.sourceId === "openfreemap") {
+        console.log("[CRIA MAP DATA]", event.dataType, event.sourceId);
+      }
+    });
     const applyMarkersToStyle = () => {
       const st = store.getState();
       const ds = map.getSource("secret-data") as maplibregl.GeoJSONSource | undefined;
@@ -770,12 +792,38 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
       if (map.getLayer("secret-location-labels")) map.setLayoutProperty("secret-location-labels", "visibility", st.showLabels && st.showLocations ? "visible" : "none");
       ["secret-route-glass", "secret-route-frost", "secret-routes"].forEach((layerId) => { if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", st.showRoutes ? "visible" : "none"); });
     };
+    let styleLogged = false;
+    let vectorSourceLogged = false;
+    let criaLayersLogged = false;
+    let threeLogged = false;
+    let vectorTileLoaded = false;
+    const debugParams = new URLSearchParams(window.location.search);
+    const debugBasemap = debugParams.get("mapDebug") === "basemap";
+    const debugNoThree = debugParams.get("mapDebug") === "no-three";
+    if (debugBasemap) console.log("[CRIA MAP] BASEMAP-ONLY DEBUG MODE — CRIA layers + Three.js disabled");
+    if (debugNoThree) console.log("[CRIA MAP] NO-THREE DEBUG MODE — Three.js overlay disabled");
     // Idempotent layer/materialization pass. Safe to call repeatedly — every
     // source and layer creation is guarded, so style reloads (e.g. the globe
     // projection swap) simply re-materialize the CRIA layers instead of
     // duplicating them.
     const ensureCRIALayers = () => {
       if (!styleAvailable(map)) return;
+      if (!styleLogged) {
+        styleLogged = true;
+        console.log("[CRIA MAP] style loaded");
+        console.log("[CRIA MAP] SOURCES", Object.entries(map.getStyle().sources ?? {}).map(([id, source]) => ({
+          id,
+          type: (source as { type?: string }).type,
+          url: "url" in source ? (source as { url?: string }).url : undefined,
+        })));
+        const canvas = map.getCanvas();
+        console.log("[CRIA MAP CANVAS]", {
+          width: canvas.width,
+          height: canvas.height,
+          clientWidth: canvas.clientWidth,
+          clientHeight: canvas.clientHeight,
+        });
+      }
       ["secret-global-intel-glow", "secret-global-intel-arcs"].forEach((layerId) => {
         if (map.getLayer(layerId)) map.removeLayer(layerId);
       });
@@ -803,21 +851,42 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
       }
       const vectorSource = ensureVectorSource(map);
       if (!vectorSource) {
-        mapLog("building vector source unavailable");
+        console.error("[CRIA MAP] VECTOR TILE FAILURE — building vector source unavailable");
         reportStatus("degraded");
         recolorMapStyle(map);
         applyMarkersToStyle();
-        if (!map.getLayer(threeOverlay.id)) map.addLayer(threeOverlay);
+        if (!debugNoThree && !map.getLayer(threeOverlay.id)) map.addLayer(threeOverlay);
         setReady(true);
         return;
       }
+      if (!vectorSourceLogged) {
+        vectorSourceLogged = true;
+        console.log(`[CRIA MAP] vector source found: ${vectorSource}`);
+      }
+      if (debugBasemap) {
+        // Render OpenFreeMap Liberty alone: no CRIA sources/layers, no Three.js.
+        setReady(true);
+        syncCinematicZoom();
+        reportStatus("ready");
+        return;
+      }
       addMapLayers(map, vectorSource);
+      if (!criaLayersLogged) {
+        criaLayersLogged = true;
+        console.log("[CRIA MAP] CRIA layers loaded");
+      }
       // Globe projection triggers an async style reload that wipes GeoJSON
       // source data.  Re-inject the current marker set so case/location dots
       // survive every reload cycle.
       applyMarkersToStyle();
       recolorMapStyle(map);
-      if (!map.getLayer(threeOverlay.id)) map.addLayer(threeOverlay);
+      if (!debugNoThree && !map.getLayer(threeOverlay.id)) {
+        map.addLayer(threeOverlay);
+        if (!threeLogged) {
+          threeLogged = true;
+          console.log("[CRIA MAP] THREE overlay loaded");
+        }
+      }
       setReady(true);
       syncCinematicZoom();
       reportStatus("ready");
@@ -927,6 +996,8 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
       map.getCanvas().removeEventListener("mousedown", stopOrbitOnInput);
       map.getCanvas().removeEventListener("touchstart", stopOrbitOnInput);
       map.getCanvas().removeEventListener("wheel", stopOrbitOnInput);
+      map.getCanvas().removeEventListener("webglcontextlost", onContextLost);
+      map.getCanvas().removeEventListener("webglcontextrestored", onContextRestored);
       map.remove();
       mapRef.current = null;
       threeOverlayRef.current = null;
