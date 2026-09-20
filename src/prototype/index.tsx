@@ -79,7 +79,9 @@ export function PrototypeApp() {
 
   useEffect(() => {
     if (booted) return;
-    const t = window.setTimeout(() => boot(), 1850);
+    // The shell and map mount immediately underneath; the intro overlay is
+    // purely visual and never blocks map initialization.
+    const t = window.setTimeout(() => boot(), 650);
     return () => window.clearTimeout(t);
   }, [booted, boot]);
 

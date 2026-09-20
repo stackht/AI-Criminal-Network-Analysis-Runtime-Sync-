@@ -647,4 +647,14 @@ html, body { height: 100%; min-height: 100%; overflow: hidden; background: #080d
   .pt-drawer { width: 84vw; }
   .pt-actions { gap: 6px; }
   .pt-tour { left: 8px; right: 8px; transform: none; }
+  /* bottom bar: signal first, network status compact, open-network shortcut
+     moves to the nav (drawer/rail) — sheet/nav access preserved */
+  .pt-cc-bottom { gap: 6px; }
+  .pt-cc-bottom .pt-signal-card { flex: 1 1 100%; }
+  .pt-cc-bottom > .pt-hud-panel { display: none; }
+  .pt-cc-status { flex: 1 1 auto; gap: 6px; font-size: 8.5px; padding: 7px 10px; }
 }
+/* compact map attribution: dark, small, unobtrusive (official control, not hidden) */
+.pt-cc-map .maplibregl-ctrl-attrib { background: rgba(12, 19, 32, 0.72); font-size: 9px; color: var(--pt-faint); }
+.pt-cc-map .maplibregl-ctrl-attrib a { color: var(--pt-muted); }
+.pt-cc-map .maplibregl-ctrl-bottom-right { right: 4px; bottom: 4px; }

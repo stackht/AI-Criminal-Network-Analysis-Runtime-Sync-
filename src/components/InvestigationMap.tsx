@@ -249,65 +249,16 @@ class OrbitControl implements IControl {
   }
 }
 
-function addMapLayers(map: MapLibreMap, vectorSource: string) {
+/** Phase 1 — lightweight: case/location/route data layers + data source.
+ * Cheap and independent of the 3D building tiles, so the investigative
+ * basemap can paint before heavier work. */
+function addBaseCRIALayers(map: MapLibreMap) {
   map.setLight({
     anchor: "viewport",
     color: "#b8dcff",
     intensity: 0.38,
     position: [1.25, 210, 55],
   });
-
-  if (!map.getLayer("secret-building-footprints")) {
-    map.addLayer({
-      id: "secret-building-footprints",
-      source: vectorSource,
-      "source-layer": "building",
-      type: "fill",
-      minzoom: 14,
-      filter: ["all", ["!=", ["get", "hide_3d"], true], [">", BUILDING_HEIGHT, 0]],
-      paint: {
-        "fill-color": "#0b2035",
-        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0.18, 16, 0.36, 20, 0.56],
-        "fill-outline-color": "#1d4b78",
-      },
-    });
-  }
-
-  if (!map.getLayer("secret-3d-buildings")) {
-    const labelLayer = map.getStyle().layers?.find((layer) => layer.type === "symbol" && Boolean(layer.layout?.["text-field"]));
-    map.addLayer({
-      id: "secret-3d-buildings",
-      source: vectorSource,
-      "source-layer": "building",
-      type: "fill-extrusion",
-      minzoom: 14,
-      filter: ["all", ["!=", ["get", "hide_3d"], true], [">", BUILDING_HEIGHT, 0]],
-      paint: {
-        "fill-extrusion-color": BUILDING_COLOR,
-        "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, BUILDING_HEIGHT],
-        "fill-extrusion-base": BUILDING_BASE,
-        "fill-extrusion-opacity": BUILDING_OPACITY,
-        "fill-extrusion-vertical-gradient": true,
-      },
-    }, labelLayer?.id);
-  }
-
-  if (!map.getLayer("secret-building-edges")) {
-    const labelLayer = map.getStyle().layers?.find((layer) => layer.type === "symbol" && Boolean(layer.layout?.["text-field"]));
-    map.addLayer({
-      id: "secret-building-edges",
-      source: vectorSource,
-      "source-layer": "building",
-      type: "line",
-      minzoom: 15,
-      filter: ["all", ["!=", ["get", "hide_3d"], true], [">", BUILDING_HEIGHT, 0]],
-      paint: {
-        "line-color": "#2a6f98",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.2, 17, 0.55, 20, 1],
-        "line-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0.16, 17, 0.42, 20, 0.7],
-      },
-    }, labelLayer?.id);
-  }
 
   if (!map.getSource("secret-data")) map.addSource("secret-data", { type: "geojson", data: featureCollection([]) });
   if (!map.getLayer("secret-route-glass")) {
@@ -375,6 +326,59 @@ function addMapLayers(map: MapLibreMap, vectorSource: string) {
       layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 10, "text-offset": [0, 1.2], "text-anchor": "top", "text-allow-overlap": false },
       paint: { "text-color": "#dff8ff", "text-halo-color": "#061326", "text-halo-width": 1.5 },
     });
+  }
+}
+
+/** Phase 2 — heavier: 3D building footprint/extrusion/edge layers. */
+function addBuildingLayers(map: MapLibreMap, vectorSource: string) {
+  if (!map.getLayer("secret-building-footprints")) {
+    map.addLayer({
+      id: "secret-building-footprints",
+      source: vectorSource,
+      "source-layer": "building",
+      type: "fill",
+      minzoom: 14,
+      filter: ["all", ["!=", ["get", "hide_3d"], true], [">", BUILDING_HEIGHT, 0]],
+      paint: {
+        "fill-color": "#0b2035",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0.18, 16, 0.36, 20, 0.56],
+        "fill-outline-color": "#1d4b78",
+      },
+    });
+  }
+  if (!map.getLayer("secret-3d-buildings")) {
+    const labelLayer = map.getStyle().layers?.find((layer) => layer.type === "symbol" && Boolean(layer.layout?.["text-field"]));
+    map.addLayer({
+      id: "secret-3d-buildings",
+      source: vectorSource,
+      "source-layer": "building",
+      type: "fill-extrusion",
+      minzoom: 14,
+      filter: ["all", ["!=", ["get", "hide_3d"], true], [">", BUILDING_HEIGHT, 0]],
+      paint: {
+        "fill-extrusion-color": BUILDING_COLOR,
+        "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, BUILDING_HEIGHT],
+        "fill-extrusion-base": BUILDING_BASE,
+        "fill-extrusion-opacity": BUILDING_OPACITY,
+        "fill-extrusion-vertical-gradient": true,
+      },
+    }, labelLayer?.id);
+  }
+  if (!map.getLayer("secret-building-edges")) {
+    const labelLayer = map.getStyle().layers?.find((layer) => layer.type === "symbol" && Boolean(layer.layout?.["text-field"]));
+    map.addLayer({
+      id: "secret-building-edges",
+      source: vectorSource,
+      "source-layer": "building",
+      type: "line",
+      minzoom: 15,
+      filter: ["all", ["!=", ["get", "hide_3d"], true], [">", BUILDING_HEIGHT, 0]],
+      paint: {
+        "line-color": "#2a6f98",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.2, 17, 0.55, 20, 1],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0.16, 17, 0.42, 20, 0.7],
+      },
+    }, labelLayer?.id);
   }
 }
 
@@ -567,6 +571,12 @@ function createThreeIntelOverlay(): ThreeIntelOverlay {
   let origin: maplibregl.MercatorCoordinate | null = null;
   let meterScale = 0;
   let animationStart = performance.now();
+  // Lightweight mode for phones / reduced-motion: skip continuous repaint
+  // (the overlay still draws on every MapLibre frame) and slow the pulse.
+  const lightweight =
+    typeof window !== "undefined" &&
+    (window.innerWidth < 768 || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  let pulsePhase = 0;
 
   const disposeGroup = () => {
     group.traverse((object) => {
@@ -600,11 +610,21 @@ function createThreeIntelOverlay(): ThreeIntelOverlay {
       camera.projectionMatrix = projection.multiply(translation).multiply(rotation).multiply(scale);
 
       const elapsed = (performance.now() - animationStart) / 1000;
-      group.rotation.y = elapsed * 0.24;
-      const pulse = 1 + Math.sin(elapsed * 2.8) * 0.08;
-      group.children.forEach((child, index) => {
-        if (index > 0 && child instanceof THREE.Mesh) child.scale.setScalar(index % 2 === 0 ? pulse : 1 / pulse);
-      });
+      if (lightweight) {
+        // Static geometry with a slow 2-step pulse; the globe keeps full
+        // interactivity. MapLibre paints this layer during its normal frames.
+        pulsePhase = Math.floor(elapsed / 0.4) % 2;
+        const pulse = pulsePhase ? 1.04 : 1;
+        group.children.forEach((child, index) => {
+          if (index > 0 && child instanceof THREE.Mesh) child.scale.setScalar(pulse);
+        });
+      } else {
+        group.rotation.y = elapsed * 0.24;
+        const pulse = 1 + Math.sin(elapsed * 2.8) * 0.08;
+        group.children.forEach((child, index) => {
+          if (index > 0 && child instanceof THREE.Mesh) child.scale.setScalar(index % 2 === 0 ? pulse : 1 / pulse);
+        });
+      }
       renderer.resetState();
       renderer.render(scene, camera);
       mapInstance?.triggerRepaint();
@@ -681,7 +701,11 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
 
   useEffect(() => {
     if (!hostRef.current) return;
-    const map = new maplibregl.Map({ container: hostRef.current, style: OPENFREEMAP_STYLE, projection: { type: "globe" }, center: INDIA_CENTER, zoom: 3, pitch: 60, bearing: -14, maxPitch: 78, maxZoom: 22, minZoom: 2, pitchWithRotate: true, dragRotate: true, localIdeographFontFamily: "sans-serif", canvasContextAttributes: { antialias: true } } as unknown as maplibregl.MapOptions);
+    const map = new maplibregl.Map({ container: hostRef.current, style: OPENFREEMAP_STYLE, projection: { type: "globe" }, center: INDIA_CENTER, zoom: 3, pitch: 60, bearing: -14, maxPitch: 78, maxZoom: 22, minZoom: 2, pitchWithRotate: true, dragRotate: true, localIdeographFontFamily: "sans-serif", canvasContextAttributes: { antialias: true }, attributionControl: false } as unknown as maplibregl.MapOptions);
+// Single, compact attribution per OpenFreeMap/OpenMapTiles rules — the
+// control collects the style's own attribution strings; no large branding,
+// no DOM deletion, official API.
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     if (typeof window !== "undefined") {
       // Temporary diagnostic handle for Cloudflare/production debugging.
       (window as unknown as { __criaMap?: MapLibreMap }).__criaMap = map;
@@ -698,7 +722,14 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
       });
     }
     const resizeObserver = new ResizeObserver(() => {
-      try { map.resize(); } catch { /* container mid-layout */ }
+      const host = hostRef.current;
+      if (host && host.clientWidth > 0 && host.clientHeight > 0) {
+        // One resize per animation frame — avoids resize storms during layout
+        // transitions while staying correct over time.
+        requestAnimationFrame(() => {
+          try { map.resize(); } catch { /* container mid-layout */ }
+        });
+      }
     });
     if (hostRef.current) resizeObserver.observe(hostRef.current);
     const threeOverlay = createThreeIntelOverlay();
@@ -816,43 +847,32 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
     const debugNoThree = debugParams.get("mapDebug") === "no-three";
     if (debugBasemap) console.log("[CRIA MAP] BASEMAP-ONLY DEBUG MODE — CRIA layers + Three.js disabled");
     if (debugNoThree) console.log("[CRIA MAP] NO-THREE DEBUG MODE — Three.js overlay disabled");
-    // Idempotent layer/materialization pass. Safe to call repeatedly — every
-    // source and layer creation is guarded, so style reloads (e.g. the globe
-    // projection swap) simply re-materialize the CRIA layers instead of
-    // duplicating them.
-    const ensureCRIALayers = () => {
-      if (!styleAvailable(map)) return;
-      if (!styleLogged) {
-        styleLogged = true;
-        console.log("[CRIA MAP] style loaded");
-        console.log("[CRIA MAP] SOURCES", Object.entries(map.getStyle().sources ?? {}).map(([id, source]) => ({
-          id,
-          type: (source as { type?: string }).type,
-          url: "url" in source ? (source as { url?: string }).url : undefined,
-        })));
-        const canvas = map.getCanvas();
-        console.log("[CRIA MAP CANVAS]", {
-          width: canvas.width,
-          height: canvas.height,
-          clientWidth: canvas.clientWidth,
-          clientHeight: canvas.clientHeight,
-        });
+    // Idempotent, phased initialization. The basemap paints as soon as the
+// style JSON is available; CRIA data layers and 3D buildings follow, and the
+// Three.js overlay is added last and never blocks map availability.
+    const phaseBase = { done: false };
+    const phaseBuildings = { done: false };
+    const phaseThree = { done: false };
+    let recoloredStyle: unknown = null;
+    const recolorOnce = () => {
+      const current = map.getStyle();
+      if (current && current !== recoloredStyle) {
+        recolorMapStyle(map);
+        recoloredStyle = current;
       }
+    };
+    const applyGlobeSelection = () => {
       ["secret-global-intel-glow", "secret-global-intel-arcs"].forEach((layerId) => {
         if (map.getLayer(layerId)) map.removeLayer(layerId);
       });
       if (map.getSource("secret-global-intel")) map.removeSource("secret-global-intel");
-      // Bend the planet into a 3D globe like Google Earth, with atmospheric
-      // fog/glow so the round horizon and space read clearly behind the map.
       const projection = map.getProjection();
       if (projection?.type !== "globe") {
         projectionRecolorPending = true;
         try { map.setProjection({ type: "globe" }); } catch (error) {
           console.error("[CRIA MAP] globe projection failed", error);
-          reportStatus("degraded");
         }
       }
-      // Older MapLibre builds do not expose fog; keep the globe usable there.
       if (typeof (map as unknown as { setFog?: (f: unknown) => void }).setFog === "function") {
         (map as unknown as { setFog: (f: unknown) => void }).setFog({
           "range": [2, 9],
@@ -863,50 +883,66 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
           "star-intensity": 0.08,
         });
       }
-      const vectorSource = ensureVectorSource(map);
-      if (!vectorSource) {
-        console.error("[CRIA MAP] VECTOR TILE FAILURE — building vector source unavailable");
-        reportStatus("degraded");
-        recolorMapStyle(map);
-        applyMarkersToStyle();
-        if (!debugNoThree && !map.getLayer(threeOverlay.id)) map.addLayer(threeOverlay);
-        setReady(true);
-        return;
+    };
+    const ensureCRIALayers = () => {
+      if (!styleAvailable(map)) return;
+      if (!styleLogged) {
+        styleLogged = true;
+        console.log("[CRIA MAP] style loaded");
       }
-      if (!vectorSourceLogged) {
-        vectorSourceLogged = true;
-        console.log(`[CRIA MAP] vector source found: ${vectorSource}`);
-      }
-      if (debugBasemap) {
-        // Render OpenFreeMap Liberty alone: no CRIA sources/layers, no Three.js.
+      applyGlobeSelection();
+      // Phase 1 — recolour once + CRIA data layers: basemap becomes usable.
+      if (!phaseBase.done) {
+        const vectorSource = ensureVectorSource(map);
+        if (!vectorSource) {
+          console.error("[CRIA MAP] VECTOR TILE FAILURE — building vector source unavailable");
+          reportStatus("degraded");
+          return;
+        }
+        if (!vectorSourceLogged) {
+          vectorSourceLogged = true;
+          console.log(`[CRIA MAP] vector source found: ${vectorSource}`);
+        }
+        if (!debugBasemap) {
+          recolorOnce();
+          addBaseCRIALayers(map);
+          applyMarkersToStyle();
+        }
         setReady(true);
         syncCinematicZoom();
         reportStatus("ready");
-        return;
-      }
-      addMapLayers(map, vectorSource);
-      if (!criaLayersLogged) {
-        criaLayersLogged = true;
-        console.log("[CRIA MAP] CRIA layers loaded");
-      }
-      // Globe projection triggers an async style reload that wipes GeoJSON
-      // source data.  Re-inject the current marker set so case/location dots
-      // survive every reload cycle.
-      applyMarkersToStyle();
-      recolorMapStyle(map);
-      if (!debugNoThree && !map.getLayer(threeOverlay.id)) {
-        map.addLayer(threeOverlay);
-        if (!threeLogged) {
-          threeLogged = true;
-          console.log("[CRIA MAP] THREE overlay loaded");
+        console.log("[CRIA MAP] BASEMAP READY — CRIA data layers loaded");
+        phaseBase.done = true;
+        // One-shot recalibration after the shell settles (entrance animation).
+        window.setTimeout(() => { try { map.resize(); } catch { /* noop */ } }, 0);
+        if (debugBasemap) {
+          console.log("[CRIA MAP] BASEMAP-ONLY DEBUG MODE — CRIA layers + Three.js disabled");
+          return;
         }
       }
-      setReady(true);
-      syncCinematicZoom();
-      reportStatus("ready");
-      // Recalibrate once after the shell settles — entrance animations can
-      // leave MapLibre sized to a mid-transition container on small screens.
-      window.setTimeout(() => { try { map.resize(); } catch { /* noop */ } }, 0);
+      // Phase 2 — 3D building layers (guarded, cheap to add).
+      if (!phaseBuildings.done) {
+        const vs = ensureVectorSource(map);
+        if (vs) {
+          addBuildingLayers(map, vs);
+          phaseBuildings.done = true;
+          console.log("[CRIA MAP] 3D buildings layers added");
+        }
+      }
+      // Phase 3 — Three.js intelligence overlay, deferred and non-fatal.
+      if (!phaseThree.done) {
+        window.setTimeout(() => {
+          if (!debugNoThree && !map.getLayer(threeOverlay.id)) {
+            try {
+              map.addLayer(threeOverlay);
+              console.log("[CRIA MAP] THREE overlay loaded");
+            } catch (error) {
+              console.error("[CRIA MAP] THREE.JS FAILURE — overlay skipped; map continues", error);
+            }
+          }
+          phaseThree.done = true;
+        }, 0);
+      }
     };
     const onLocationClick = (event: MapMouseEvent) => {
       const feature = eventFeatures(event)[0];
@@ -963,11 +999,11 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
         }
       }
     });
-    // Boot poller: materialize CRIA layers as soon as the style JSON is
-    // available, WITHOUT waiting for MapLibre's `load` event (which can stall
-    // indefinitely while tile managers settle). All layer/source creation is
-    // guarded and idempotent, so repeated calls are safe.
+    // Short emergency fallback — normal init is event-driven (load/styledata/
+// idle). This poll exists only for environments where those events stall; it
+// stops as soon as the basemap phase is done (max ~3s).
     let bootPoll: number | undefined;
+    let bootTicks = 0;
     const stopBootPoll = () => {
       if (bootPoll !== undefined) {
         window.clearInterval(bootPoll);
@@ -975,15 +1011,15 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
       }
     };
     bootPoll = window.setInterval(() => {
-      if (statusRef.current === "ready") {
+      bootTicks += 1;
+      if (phaseBase.done || bootTicks > 10) {
         stopBootPoll();
         return;
       }
       try { ensureCRIALayers(); } catch (error) {
         console.error("[CRIA MAP] boot poll failed", error);
       }
-    }, 350);
-    const bootPollTimeout = window.setTimeout(stopBootPoll, 60000);
+    }, 300);
     // Watchdog: never leave the theatre on a silent spinner. If style load or
     // the ensure pass stalls, surface a clear degraded state for diagnosis.
     const watchdog = window.setTimeout(() => {
@@ -1006,7 +1042,6 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
     return () => {
       resizeObserver.disconnect();
       stopBootPoll();
-      window.clearTimeout(bootPollTimeout);
       window.clearTimeout(watchdog);
       stopOrbit();
       stopOrbitRef.current = () => {};
