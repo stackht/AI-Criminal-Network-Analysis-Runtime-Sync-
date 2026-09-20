@@ -1,5 +1,5 @@
 /* =============================================================
-   SECRET SHOWCASE — prototype design system (isolated, pt- prefix)
+   CRIA SHOWCASE — prototype design system (isolated, pt- prefix)
    Midnight graphite base + arctic cyan / muted violet accents.
    ============================================================= */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
@@ -264,6 +264,7 @@
 }
 .pt-intro-name { font: 700 30px/1 "IBM Plex Mono", monospace; letter-spacing: 0.34em; color: var(--pt-text); }
 .pt-intro-sub { margin-top: 14px; font: 500 10px/1.6 "IBM Plex Mono", monospace; letter-spacing: 0.26em; color: var(--pt-muted); }
+.pt-intro-desc { margin-top: 7px; font: 400 9.5px/1.6 "IBM Plex Mono", monospace; letter-spacing: 0.34em; color: var(--pt-faint); text-transform: uppercase; }
 .pt-intro-line { margin-top: 46px; font: 500 11px/1 "IBM Plex Mono", monospace; letter-spacing: 0.3em; color: var(--pt-cyan); }
 .pt-intro-bars {
   display: flex;

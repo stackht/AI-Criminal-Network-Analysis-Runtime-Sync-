@@ -99,7 +99,7 @@ export function CommandPalette() {
           <Search size={16} style={{ color: "var(--pt-cyan)" }} />
           <input
             ref={inputRef}
-            placeholder="Search SECRET — entities, evidence, cases, views…"
+            placeholder="Search CRIA — entities, evidence, cases, views…"
             value={query}
             onChange={(e) => { setQuery(e.target.value); setCursor(0); }}
             onKeyDown={onKey}

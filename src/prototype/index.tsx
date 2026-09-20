@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, Globe2, Network as NetworkIcon, Users, Fingerprint, Clock3, FlaskConical, ShieldCheck, X, ChevronRight, ChevronLeft } from "lucide-react";
 import "./styles.css";
 import { caseTitle, caseKey, PROTOTYPE_LABEL } from "./data";
+import { PROTOTYPE_BRAND, BRAND_TITLE } from "./brand";
 import { useProtoStore, type ProtoView, focusEntityOnMap } from "./store";
 import { Overview } from "./views/overview";
 import { CommandCentre } from "./views/commandCentre";
@@ -61,6 +62,10 @@ export function PrototypeApp() {
   }, []);
 
   useEffect(() => {
+    document.title = BRAND_TITLE;
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -97,14 +102,14 @@ export function PrototypeApp() {
       <div className="pt-shell">
         <header className="pt-header">
           <div className="pt-brand">
-            <span className="pt-brand-mark">S</span>
+            <span className="pt-brand-mark">{PROTOTYPE_BRAND.mark}</span>
             <div>
-              <div className="pt-brand-name">SECRET</div>
-              <div className="pt-brand-tag">SMART ENTITY & CRIMINAL RELATIONSHIP EXPLORATION TOOL</div>
+              <div className="pt-brand-name">{PROTOTYPE_BRAND.name}</div>
+              <div className="pt-brand-tag">{PROTOTYPE_BRAND.descriptor.toUpperCase()}</div>
             </div>
           </div>
           <div className="pt-breadcrumb">
-            <b>{caseKey}</b> · {caseTitle} · <span className="pt-muted">{view.toUpperCase().replace("-", " ")}</span>
+            <b>{PROTOTYPE_BRAND.name}</b> · {caseKey} · {caseTitle} · <span className="pt-muted">{view.toUpperCase().replace("-", " ")}</span>
           </div>
           <div className="pt-header-spacer" />
           <div className="pt-header-group">
@@ -191,7 +196,7 @@ function Intro() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, filter: "blur(8px)", scale: 1.02 }}
       transition={{ duration: reduced ? 0 : 0.4 }}
-      aria-label="Initializing SECRET intelligence engine"
+      aria-label="Initializing CRIA intelligence engine"
     >
       <div className="pt-intro-inner">
         <motion.div
@@ -200,15 +205,15 @@ function Intro() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: reduced ? 0 : 0.55, ease: "easeOut" }}
         >
-          S
+          {PROTOTYPE_BRAND.mark}
         </motion.div>
         <motion.div
           className="pt-intro-name"
           initial={{ opacity: 0, y: 8, letterSpacing: "0.6em" }}
-          animate={{ opacity: 1, y: 0, letterSpacing: "0.34em" }}
+          animate={{ opacity: 1, y: 0, letterSpacing: "0.42em" }}
           transition={{ duration: reduced ? 0 : 0.5, delay: 0.08 }}
         >
-          SECRET
+          {PROTOTYPE_BRAND.name}
         </motion.div>
         <motion.div
           className="pt-intro-sub"
@@ -216,7 +221,15 @@ function Intro() {
           animate={{ opacity: 1 }}
           transition={{ duration: reduced ? 0 : 0.4, delay: 0.2 }}
         >
-          SMART ENTITY & CRIMINAL RELATIONSHIP EXPLORATION TOOL
+          {PROTOTYPE_BRAND.fullName.toUpperCase()}
+        </motion.div>
+        <motion.div
+          className="pt-intro-desc"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: reduced ? 0 : 0.4, delay: 0.3 }}
+        >
+          {PROTOTYPE_BRAND.descriptor.toUpperCase()}
         </motion.div>
         <motion.div
           className="pt-intro-line"

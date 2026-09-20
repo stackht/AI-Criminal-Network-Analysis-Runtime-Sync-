@@ -1,14 +1,16 @@
-# SECRET Showcase — Prototype Overview and Technical Approach
+# CRIA Showcase — Prototype Overview and Technical Approach
 
-**Project:** SECRET - Strategic Entity & Criminal Relationship Exploration Tool (SIH 2026 showcase prototype)  
+**Product:** CRIA - Criminal Relationship Intelligence & Analytics  
+**Descriptor:** Investigative Intelligence Platform  
+**Project:** CRIA (SIH 2026 showcase prototype) — the showcase product identity of SECRET  
 **Repository:** `stackht/AI-Criminal-Network-Analysis-Runtime-Sync-`  
 **Status:** Production-polish standalone demo with React frontend, deterministic synthetic intelligence corpus, MapLibre-based 3D command centre, network analytics visualization, analyst decision flow, and a synthetic evidence integrity ledger.
 
-> **PROTOTYPE • SYNTHETIC DATA** — every entity, case, location, transaction, call record and relationship in this application is fictional. No real criminal information is used. This repository contains only the showcase experience and the minimum runtime it needs; the full SECRET production application (backend, case intake, reports, live API) is a separate product and is not part of this repository.
+> **PROTOTYPE • SYNTHETIC DATA** — every entity, case, location, transaction, call record and relationship in this application is fictional. No real criminal information is used. This repository contains only the showcase experience and the minimum runtime it needs; the full production SECRET application (backend, case intake, reports, live API) is a separate product and is not part of this repository.
 
 ## 1. Purpose
 
-SECRET is an investigative intelligence and decision-support concept. This repository is a **presentation-focused prototype** built to demonstrate the product story for SIH 2026 judging, large-screen demos and live walkthroughs:
+CRIA is an investigative intelligence and decision-support concept. This repository is a **presentation-focused prototype** built to demonstrate the product story for SIH 2026 judging, large-screen demos and live walkthroughs:
 
 - a cinematic institutional command platform, not a generic admin dashboard;
 - case intelligence overview across entities and relationships;
@@ -25,7 +27,7 @@ The platform produces **indicators and evidence-backed investigative leads**. It
 ## 2. High-Level Architecture
 
 ```text
-                  SECRET showcase web experience
+                  CRIA showcase web experience
        +-----------------------------------------------------------+
        | React 19 + TypeScript + Vite                              |
        | Zustand state | Framer Motion transitions                 |
@@ -45,7 +47,7 @@ The platform produces **indicators and evidence-backed investigative leads**. It
 ## 3. Repository Layout
 
 ```text
-secret-showcase/
+cria-showcase/
 ├── src/
 │   ├── main.tsx                  React bootstrap — renders PrototypeApp
 │   ├── types.ts                  shared contracts (map, entity, timeline types)
@@ -285,7 +287,7 @@ To add a capability to the showcase:
 
 ## 16. Evidence Integrity Layer (as demonstrated in the prototype)
 
-The showcase represents SECRET's tamper-evident integrity concept for evidence and analytical events. Sensitive evidence is never embedded; the prototype records per-record SHA-256 commitments and Merkle batch numbers, plus a chained record list of applied operations (registration, anomaly raise, analyst decision).
+The showcase represents the CRIA tamper-evident integrity concept for evidence and analytical events. Sensitive evidence is never embedded; the prototype records per-record SHA-256 commitments and Merkle batch numbers, plus a chained record list of applied operations (registration, anomaly raise, analyst decision).
 
 ### Accurate description (non-claims)
 
