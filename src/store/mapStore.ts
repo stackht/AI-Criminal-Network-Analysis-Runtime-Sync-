@@ -13,6 +13,7 @@ export type MapSource = "mock" | "backend";
 export type CameraRequest =
   | { kind: "fit-case"; caseId: string; nonce: number }
   | { kind: "fit-location"; locationId: string; nonce: number }
+  | { kind: "fit-entity"; entityId: string; nonce: number }
   | { kind: "fit-point"; lat: number; lon: number; zoomDist?: number; nonce: number }
   | { kind: "fit-all"; nonce: number }
   | { kind: "reset"; nonce: number };
@@ -49,6 +50,11 @@ interface MapState extends MapFlags {
   toggleFlag: (key: keyof MapFlags) => void;
   requestCamera: (kind: CameraRequest["kind"], id?: string) => void;
   flyToGeo: (lat: number, lon: number, zoomDist?: number) => void;
+  /** One-tap entity focus: selects the entity, resolves its best location
+   * (by importance, then observation count, then source count) and requests a
+   * building-level camera flight. Never throws when the entity has no
+   * geolocation — selection still happens, the camera stays put. */
+  focusEntity: (entityId: string) => void;
   clearSelection: () => void;
 
   locationById: (id: string) => CaseLocation | null;
@@ -109,6 +115,8 @@ export function createMapStore(options: CreateMapStoreOptions = {}) {
         req = { kind: "fit-case", caseId: id ?? "", nonce };
       } else if (kind === "fit-location") {
         req = { kind: "fit-location", locationId: id ?? "", nonce };
+      } else if (kind === "fit-entity") {
+        req = { kind: "fit-entity", entityId: id ?? "", nonce };
       } else if (kind === "fit-all") {
         req = { kind: "fit-all", nonce };
       } else {
@@ -120,6 +128,40 @@ export function createMapStore(options: CreateMapStoreOptions = {}) {
     flyToGeo: (lat, lon, zoomDist = 34) => {
       const nonce = (get().cameraRequest?.nonce ?? 0) + 1;
       set({ cameraRequest: { kind: "fit-point", lat, lon, zoomDist, nonce } });
+    },
+
+    focusEntity: (entityId) => {
+      const state = get();
+      state.selectEntity(entityId);
+      const locations = state.locationsForEntity(entityId);
+      const targetLocation = [...locations].sort((a, b) => {
+        const importanceDelta = b.importance - a.importance;
+        if (importanceDelta !== 0) return importanceDelta;
+        const obsDelta = (b.observationCount ?? 0) - (a.observationCount ?? 0);
+        if (obsDelta !== 0) return obsDelta;
+        return (b.sourceCount ?? 0) - (a.sourceCount ?? 0);
+      })[0];
+      if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) {
+        console.debug("[CRIA ENTITY FOCUS]", {
+          entityId,
+          locations: locations.map((location) => ({
+            id: location.id,
+            name: location.name,
+            importance: location.importance,
+          })),
+          target: targetLocation
+            ? {
+                id: targetLocation.id,
+                name: targetLocation.name,
+                latitude: targetLocation.latitude,
+                longitude: targetLocation.longitude,
+              }
+            : null,
+        });
+      }
+      if (!targetLocation) return;
+      state.selectLocation(targetLocation.id);
+      state.requestCamera("fit-entity", entityId);
     },
 
     clearSelection: () => set({ selectedCaseId: null, selectedLocationId: null }),

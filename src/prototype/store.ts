@@ -104,15 +104,10 @@ export const useProtoStore = create<ShellState>((set, get) => ({
 /**
  * Fly the prototype map camera to an entity's primary recorded location and
  * select it, so the Command Centre behaves like an investigator focusing a
- * subject.
+ * subject. Delegates to the map store's unified one-tap focus action.
  */
 export function focusEntityOnMap(entityId: string) {
-  const place = [...meridianCaseMarker.locations]
-    .filter((l) => l.entityIds.includes(entityId))
-    .sort((a, b) => b.importance - a.importance)[0];
-  const s = useProtoMapStore.getState();
-  s.selectEntity(entityId);
-  if (place) s.flyToGeo(place.latitude, place.longitude, 34);
+  useProtoMapStore.getState().focusEntity(entityId);
   getShell().setView("command-centre");
 }
 

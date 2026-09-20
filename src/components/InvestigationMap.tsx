@@ -741,6 +741,9 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
     map.touchZoomRotate.enableRotation();
     const syncCinematicZoom = () => {
       if (orbitEnabledRef.current) return;
+      // Never fight an active camera animation: setPitch can cancel the
+      // in-flight easeTo/flyTo and freeze the flight mid-way.
+      if (map.isZooming() || map.isMoving?.()) return;
       const nextPitch = cinematicPitchForZoom(map.getZoom());
       if (Math.abs(map.getPitch() - nextPitch) > 0.2) map.setPitch(nextPitch);
     };
@@ -1097,7 +1100,29 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
       const location = state.locationById(request.locationId);
       if (location) {
         const target: [number, number] = [location.longitude, location.latitude];
-        map.flyTo({ center: target, zoom: 21.5, pitch: 72, bearing: map.getBearing() + 18, duration: 2200, essential: true });
+        map.stop();
+        map.flyTo({ center: target, zoom: 21.5, pitch: 72, bearing: map.getBearing() + 18, duration: 1400, essential: true });
+      }
+    } else if (request.kind === "fit-entity") {
+      if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) console.log("[CRIA CAMERA] fit-entity", request.entityId);
+      // One-tap entity focus: resolve the entity's best location (the map
+      // store already ranked importance/observations/sources), stop orbit and
+      // any in-flight camera, then fly to a building-level 3D view.
+      const locations = state.locationsForEntity(request.entityId);
+      const targetLocation = [...locations].sort((a, b) => {
+        const importanceDelta = b.importance - a.importance;
+        if (importanceDelta !== 0) return importanceDelta;
+        const obsDelta = (b.observationCount ?? 0) - (a.observationCount ?? 0);
+        if (obsDelta !== 0) return obsDelta;
+        return (b.sourceCount ?? 0) - (a.sourceCount ?? 0);
+      })[0];
+      if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) console.log("[CRIA CAMERA] fit-entity target", targetLocation?.id);
+      if (targetLocation) {
+        stopOrbitRef.current();
+        state.selectLocation(targetLocation.id);
+        const target: [number, number] = [targetLocation.longitude, targetLocation.latitude];
+        map.stop();
+        map.flyTo({ center: target, zoom: 21.5, pitch: 72, bearing: map.getBearing() + 18, duration: 1200, essential: true });
       }
     } else if (request.kind === "fit-case") {
       const marker = state.markers.find((item) => item.caseId === request.caseId);
