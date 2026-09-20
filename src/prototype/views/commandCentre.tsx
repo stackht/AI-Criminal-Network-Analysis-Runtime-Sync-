@@ -26,6 +26,7 @@ export function CommandCentre() {
   const flagSet = useProtoStore((s) => s.flagSet);
   const [openDecision, setOpenDecision] = useState(false);
   const [mapStatus, setMapStatus] = useState<MapStatus>("initializing");
+  const [sheet, setSheet] = useState<"entity" | "index" | null>(null);
 
   const mapEngineTone = mapStatus === "ready" ? "green" : mapStatus === "degraded" ? "amber" : "default";
 
@@ -48,6 +49,28 @@ export function CommandCentre() {
 
   const selectedEntity: ProtoEntity | undefined = selectedEntityId ? entityById.get(selectedEntityId) : undefined;
   const signal = potentialLinks[0];
+
+  // Shared so the entity index can appear in the desktop HUD and in the mobile
+  // bottom sheet without duplicating markup.
+  const entityIndex = (
+    <div className="pt-hud-panel">
+      <div className="pt-hud-kicker">
+        <span>ENTITY INDEX</span>
+        <span className="pt-num" style={{ color: "var(--pt-faint)" }}>{topEntities.length}/{netCounts.entities}</span>
+      </div>
+      <div className="pt-list-scroll">
+        {topEntities.map((e) => (
+          <button key={e.id} type="button" className={`pt-list-item ${selectedEntityId === e.id ? "selected" : ""}`} onClick={() => focusEntityOnMap(e.id)}>
+            <EntityGlyph type={e.type} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
+            <span className={`pt-risk ${e.risk > 85 ? "hot" : ""}`}>{e.risk}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const toggleSheet = (which: "entity" | "index") => setSheet((s) => (s === which ? null : which));
 
   const filterRows = [
     { key: "showCases", label: "OPERATIONS", sub: `${netCounts.entities} ENTITIES` },
@@ -103,25 +126,11 @@ export function CommandCentre() {
           </div>
         </div>
 
-        <div className="pt-hud-panel">
-          <div className="pt-hud-kicker">
-            <span>ENTITY INDEX</span>
-            <span className="pt-num" style={{ color: "var(--pt-faint)" }}>{topEntities.length}/{netCounts.entities}</span>
-          </div>
-          <div className="pt-list-scroll">
-            {topEntities.map((e) => (
-              <button key={e.id} type="button" className={`pt-list-item ${selectedEntityId === e.id ? "selected" : ""}`} onClick={() => focusEntityOnMap(e.id)}>
-                <EntityGlyph type={e.type} />
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
-                <span className={`pt-risk ${e.risk > 85 ? "hot" : ""}`}>{e.risk}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        {entityIndex}
       </aside>
 
       {/* right HUD — selected entity */}
-      <aside className="pt-cc-right" aria-label="Entity intelligence">
+      <aside className={`pt-cc-right ${sheet === "entity" ? "cc-open" : ""}`} aria-label="Entity intelligence">
         <AnimatePresence mode="wait">
           {selectedEntity ? (
             <motion.div
@@ -177,6 +186,21 @@ export function CommandCentre() {
           )}
         </AnimatePresence>
       </aside>
+
+      {/* mobile access buttons: theatre + entity index become bottom sheets */}
+      <div className="pt-cc-actions" aria-label="mobile panels">
+        <button type="button" className={`pt-btn ${sheet === "entity" ? "pt-btn-primary" : ""}`} onClick={() => toggleSheet("entity")} aria-label="Toggle theatre">
+          THEATRE
+        </button>
+        <button type="button" className={`pt-btn ${sheet === "index" ? "pt-btn-primary" : ""}`} onClick={() => toggleSheet("index")} aria-label="Toggle entity index">
+          INDEX
+        </button>
+      </div>
+      {sheet === "index" && (
+        <aside className="pt-index-sheet cc-open" aria-label="Entity index sheet" onClick={() => setSheet(null)}>
+          <div onClick={(e) => e.stopPropagation()}>{entityIndex}</div>
+        </aside>
+      )}
 
       {/* bottom HUD */}
       <footer className="pt-cc-bottom" aria-label="Network status">

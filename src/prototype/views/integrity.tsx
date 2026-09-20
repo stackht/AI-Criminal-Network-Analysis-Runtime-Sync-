@@ -90,6 +90,7 @@ export function Integrity() {
         <div style={{ padding: "14px 16px 8px" }}>
           <div className="pt-hud-kicker" style={{ marginBottom: 0 }}>REGISTERED EVIDENCE</div>
         </div>
+        <div className="pt-table-scroll">
         <table className="pt-table">
           <thead>
             <tr><th>ID</th><th>TYPE</th><th>RECORD</th><th>STATUS</th></tr>
@@ -105,6 +106,7 @@ export function Integrity() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {modalEvidence && (

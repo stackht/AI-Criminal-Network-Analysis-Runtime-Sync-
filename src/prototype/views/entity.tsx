@@ -230,6 +230,7 @@ export function EntityDossier() {
           {tab === "LOCATIONS" && (
             <div className="pt-stack">
               {things.locs.length ? (
+                <div className="pt-table-scroll">
                 <table className="pt-table">
                   <thead>
                     <tr><th>GEONODE</th><th>NAME</th><th>COORDINATES</th><th>IMPORTANCE</th><th></th></tr>
@@ -250,6 +251,7 @@ export function EntityDossier() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               ) : (
                 <p className="pt-muted">No geolocation records linked.</p>
               )}
@@ -259,6 +261,7 @@ export function EntityDossier() {
           {tab === "EVIDENCE" && (
             <div className="pt-stack">
               {things.evs.length ? (
+                <div className="pt-table-scroll">
                 <table className="pt-table">
                   <thead>
                     <tr><th>ID</th><th>TYPE</th><th>RECORD</th><th>WHEN</th><th>SOURCE</th></tr>
@@ -275,6 +278,7 @@ export function EntityDossier() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               ) : (
                 <p className="pt-muted">No evidence records linked.</p>
               )}

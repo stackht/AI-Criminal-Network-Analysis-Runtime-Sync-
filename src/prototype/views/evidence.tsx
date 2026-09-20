@@ -53,7 +53,8 @@ export function Evidence() {
           ))}
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, border: "1px solid var(--pt-border)", borderRadius: 4, overflow: "auto" }}>
+        <div style={{ flex: 1, minHeight: 0, border: "1px solid var(--pt-border)", borderRadius: 12, overflow: "auto" }}>
+          <div className="pt-table-scroll">
           <table className="pt-table">
             <thead>
               <tr>
@@ -81,6 +82,7 @@ export function Evidence() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
