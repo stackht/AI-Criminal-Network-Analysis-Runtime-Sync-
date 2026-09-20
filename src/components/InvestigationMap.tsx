@@ -31,6 +31,55 @@ const BUILDING_BASE: maplibregl.ExpressionSpecification = [
   0,
 ];
 
+/** The style JSON is "available" as soon as getStyle() returns its sources —
+ * this does NOT require the map's public `load` event, which MapLibre only
+ * fires once every tile manager reports idle (unreliable on slow/low-zoom
+ * globe loads — the exact cause of the silent Cloudflare stall). */
+function styleAvailable(map: MapLibreMap): boolean {
+  try {
+    const style = map.getStyle();
+    return Boolean(style && style.sources && Object.keys(style.sources).length > 0);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Lightweight map engine status surfaced to the Command Centre HUD. */
+export type MapStatus = "initializing" | "style-loading" | "ready" | "degraded";
+
+const CRIA_MAP_TAG = "[CRIA MAP]";
+
+function mapLog(message: string, detail?: unknown) {
+  if (detail === undefined) console.debug(CRIA_MAP_TAG, message);
+  else console.debug(CRIA_MAP_TAG, message, detail);
+}
+
+/** WebGL is probed on a throwaway canvas so we never steal MapLibre's context. */
+function webglAvailable(): boolean {
+  try {
+    const probe = document.createElement("canvas");
+    return Boolean(probe.getContext("webgl2") || probe.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+/** Derive the vector source already declared by the loaded style (Liberty ships `openmaptiles`). */
+function findVectorSourceId(map: MapLibreMap): string | null {
+  const sources = map.getStyle().sources ?? {};
+  const entry = Object.entries(sources).find(([, source]) => source.type === "vector");
+  return entry?.[0] ?? null;
+}
+
+/** Prefer the style's own vector source; only add `/planet` as a fallback. */
+function ensureVectorSource(map: MapLibreMap): string | null {
+  const existing = findVectorSourceId(map);
+  if (existing) return existing;
+  if (!map.getSource("openfreemap")) map.addSource("openfreemap", { type: "vector", url: OPENFREEMAP_PLANET });
+  return "openfreemap";
+}
+
 const MAP_COLORS = {
   background: "#050816",
   land: "#0a1024",
@@ -189,7 +238,7 @@ class OrbitControl implements IControl {
   }
 }
 
-function addMapLayers(map: MapLibreMap) {
+function addMapLayers(map: MapLibreMap, vectorSource: string) {
   map.setLight({
     anchor: "viewport",
     color: "#b8dcff",
@@ -197,12 +246,10 @@ function addMapLayers(map: MapLibreMap) {
     position: [1.25, 210, 55],
   });
 
-  if (!map.getSource("openfreemap")) map.addSource("openfreemap", { type: "vector", url: OPENFREEMAP_PLANET });
-
   if (!map.getLayer("secret-building-footprints")) {
     map.addLayer({
       id: "secret-building-footprints",
-      source: "openfreemap",
+      source: vectorSource,
       "source-layer": "building",
       type: "fill",
       minzoom: 14,
@@ -219,7 +266,7 @@ function addMapLayers(map: MapLibreMap) {
     const labelLayer = map.getStyle().layers?.find((layer) => layer.type === "symbol" && Boolean(layer.layout?.["text-field"]));
     map.addLayer({
       id: "secret-3d-buildings",
-      source: "openfreemap",
+      source: vectorSource,
       "source-layer": "building",
       type: "fill-extrusion",
       minzoom: 14,
@@ -238,7 +285,7 @@ function addMapLayers(map: MapLibreMap) {
     const labelLayer = map.getStyle().layers?.find((layer) => layer.type === "symbol" && Boolean(layer.layout?.["text-field"]));
     map.addLayer({
       id: "secret-building-edges",
-      source: "openfreemap",
+      source: vectorSource,
       "source-layer": "building",
       type: "line",
       minzoom: 15,
@@ -587,7 +634,7 @@ function createThreeIntelOverlay(): ThreeIntelOverlay {
   return overlay;
 }
 
-export function InvestigationMap({ store = useMapStore }: { store?: typeof useMapStore }) {
+export function InvestigationMap({ store = useMapStore, onStatus }: { store?: typeof useMapStore; onStatus?: (status: MapStatus) => void }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const orbitFrameRef = useRef<number | null>(null);
@@ -599,6 +646,13 @@ export function InvestigationMap({ store = useMapStore }: { store?: typeof useMa
   const threeOverlayRef = useRef<ThreeIntelOverlay | null>(null);
   const [ready, setReady] = useState(false);
   const [hover, setHover] = useState<MapHover>(null);
+  const statusRef = useRef<MapStatus>("initializing");
+  const reportStatus = (status: MapStatus) => {
+    if (statusRef.current === status) return;
+    statusRef.current = status;
+    onStatus?.(status);
+    console.log(CRIA_MAP_TAG, "status", status);
+  };
   const markers = store((state) => state.markers);
   const showCases = store((state) => state.showCases);
   const showLocations = store((state) => state.showLocations);
@@ -617,6 +671,10 @@ export function InvestigationMap({ store = useMapStore }: { store?: typeof useMa
   useEffect(() => {
     if (!hostRef.current) return;
     const map = new maplibregl.Map({ container: hostRef.current, style: OPENFREEMAP_STYLE, projection: { type: "globe" }, center: INDIA_CENTER, zoom: 3, pitch: 60, bearing: -14, maxPitch: 78, maxZoom: 22, minZoom: 2, pitchWithRotate: true, dragRotate: true, canvasContextAttributes: { antialias: true } } as unknown as maplibregl.MapOptions);
+    if (typeof window !== "undefined") {
+      // Temporary diagnostic handle for Cloudflare/production debugging.
+      (window as unknown as { __criaMap?: MapLibreMap }).__criaMap = map;
+    }
     mapRef.current = map;
     const threeOverlay = createThreeIntelOverlay();
     threeOverlayRef.current = threeOverlay;
@@ -670,20 +728,25 @@ export function InvestigationMap({ store = useMapStore }: { store?: typeof useMa
     startOrbitRef.current = startOrbit;
     map.addControl(orbitControl, "bottom-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
-    const reapplyAfterProjection = () => {
-      if (!projectionRecolorPending || !map.isStyleLoaded()) return;
-      projectionRecolorPending = false;
-      addMapLayers(map);
-      recolorMapStyle(map);
+    reportStatus("initializing");
+    mapLog("webgl " + (webglAvailable() ? "available" : "unavailable"));
+    map.on("error", (event) => {
+      console.error("[CRIA MAP ERROR]", event.error ?? event);
+      if (!webglAvailable()) reportStatus("degraded");
+    });
+    const applyMarkersToStyle = () => {
       const st = store.getState();
       const ds = map.getSource("secret-data") as maplibregl.GeoJSONSource | undefined;
       ds?.setData(buildData(st.markers, st.showCases, st.showLocations, st.showRoutes, st.selectedCaseId, st.selectedLocationId));
       if (map.getLayer("secret-location-labels")) map.setLayoutProperty("secret-location-labels", "visibility", st.showLabels && st.showLocations ? "visible" : "none");
       ["secret-route-glass", "secret-route-frost", "secret-routes"].forEach((layerId) => { if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", st.showRoutes ? "visible" : "none"); });
     };
-    map.on("idle", reapplyAfterProjection);
-    const applyStyleTheme = () => {
-      if (!map.isStyleLoaded()) return;
+    // Idempotent layer/materialization pass. Safe to call repeatedly — every
+    // source and layer creation is guarded, so style reloads (e.g. the globe
+    // projection swap) simply re-materialize the CRIA layers instead of
+    // duplicating them.
+    const ensureCRIALayers = () => {
+      if (!styleAvailable(map)) return;
       ["secret-global-intel-glow", "secret-global-intel-arcs"].forEach((layerId) => {
         if (map.getLayer(layerId)) map.removeLayer(layerId);
       });
@@ -693,7 +756,10 @@ export function InvestigationMap({ store = useMapStore }: { store?: typeof useMa
       const projection = map.getProjection();
       if (projection?.type !== "globe") {
         projectionRecolorPending = true;
-        map.setProjection({ type: "globe" });
+        try { map.setProjection({ type: "globe" }); } catch (error) {
+          console.error("[CRIA MAP] globe projection failed", error);
+          reportStatus("degraded");
+        }
       }
       // Older MapLibre builds do not expose fog; keep the globe usable there.
       if (typeof (map as unknown as { setFog?: (f: unknown) => void }).setFog === "function") {
@@ -706,19 +772,26 @@ export function InvestigationMap({ store = useMapStore }: { store?: typeof useMa
           "star-intensity": 0.08,
         });
       }
-      addMapLayers(map);
+      const vectorSource = ensureVectorSource(map);
+      if (!vectorSource) {
+        mapLog("building vector source unavailable");
+        reportStatus("degraded");
+        recolorMapStyle(map);
+        applyMarkersToStyle();
+        if (!map.getLayer(threeOverlay.id)) map.addLayer(threeOverlay);
+        setReady(true);
+        return;
+      }
+      addMapLayers(map, vectorSource);
       // Globe projection triggers an async style reload that wipes GeoJSON
       // source data.  Re-inject the current marker set so case/location dots
       // survive every reload cycle.
-      const st = store.getState();
-      const ds = map.getSource("secret-data") as maplibregl.GeoJSONSource | undefined;
-      if (ds) ds.setData(buildData(st.markers, st.showCases, st.showLocations, st.showRoutes, st.selectedCaseId, st.selectedLocationId));
-      if (map.getLayer("secret-location-labels")) map.setLayoutProperty("secret-location-labels", "visibility", st.showLabels && st.showLocations ? "visible" : "none");
-      ["secret-route-glass", "secret-route-frost", "secret-routes"].forEach((layerId) => { if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", st.showRoutes ? "visible" : "none"); });
+      applyMarkersToStyle();
       recolorMapStyle(map);
       if (!map.getLayer(threeOverlay.id)) map.addLayer(threeOverlay);
       setReady(true);
       syncCinematicZoom();
+      reportStatus("ready");
     };
     const onLocationClick = (event: MapMouseEvent) => {
       const feature = eventFeatures(event)[0];
@@ -749,8 +822,61 @@ export function InvestigationMap({ store = useMapStore }: { store?: typeof useMa
     map.getCanvas().addEventListener("mousedown", stopOrbitOnInput);
     map.getCanvas().addEventListener("touchstart", stopOrbitOnInput, { passive: true });
     map.getCanvas().addEventListener("wheel", stopOrbitOnInput, { passive: true });
-    map.on("load", applyStyleTheme);
-    map.once("idle", applyStyleTheme);
+    map.on("load", () => {
+      reportStatus("style-loading");
+      try { ensureCRIALayers(); } catch (error) {
+        console.error("[CRIA MAP] style load failed", error);
+        reportStatus("degraded");
+      }
+    });
+    // Globe projection swaps reload the style asynchronously; re-materialize
+    // layers whenever a freshly loaded style arrives — never trust a single
+    // `load` event, and never duplicate guarded layers.
+    map.on("styledata", () => {
+      if (!map.isStyleLoaded()) return;
+      try { ensureCRIALayers(); } catch (error) {
+        console.error("[CRIA MAP] style reload failed", error);
+        reportStatus("degraded");
+      }
+    });
+    map.on("idle", () => {
+      if (map.isStyleLoaded() && projectionRecolorPending) {
+        projectionRecolorPending = false;
+        try { ensureCRIALayers(); } catch (error) {
+          console.error("[CRIA MAP] idle re-materialize failed", error);
+          reportStatus("degraded");
+        }
+      }
+    });
+    // Boot poller: materialize CRIA layers as soon as the style JSON is
+    // available, WITHOUT waiting for MapLibre's `load` event (which can stall
+    // indefinitely while tile managers settle). All layer/source creation is
+    // guarded and idempotent, so repeated calls are safe.
+    let bootPoll: number | undefined;
+    const stopBootPoll = () => {
+      if (bootPoll !== undefined) {
+        window.clearInterval(bootPoll);
+        bootPoll = undefined;
+      }
+    };
+    bootPoll = window.setInterval(() => {
+      if (statusRef.current === "ready") {
+        stopBootPoll();
+        return;
+      }
+      try { ensureCRIALayers(); } catch (error) {
+        console.error("[CRIA MAP] boot poll failed", error);
+      }
+    }, 350);
+    const bootPollTimeout = window.setTimeout(stopBootPoll, 60000);
+    // Watchdog: never leave the theatre on a silent spinner. If style load or
+    // the ensure pass stalls, surface a clear degraded state for diagnosis.
+    const watchdog = window.setTimeout(() => {
+      if (statusRef.current !== "ready") {
+        console.error("[CRIA MAP] load watchdog fired — map not ready; status=", statusRef.current);
+        reportStatus("degraded");
+      }
+    }, 12000);
     map.on("click", "secret-locations", onLocationClick);
     map.on("click", "secret-cases", onCaseClick);
     map.on("click", "secret-case-halos", onCaseClick);
@@ -763,6 +889,9 @@ export function InvestigationMap({ store = useMapStore }: { store?: typeof useMa
     map.on("mouseleave", "secret-locations", onLeave);
     map.on("mouseleave", "secret-cases", onLeave);
     return () => {
+      stopBootPoll();
+      window.clearTimeout(bootPollTimeout);
+      window.clearTimeout(watchdog);
       stopOrbit();
       stopOrbitRef.current = () => {};
       startOrbitRef.current = () => {};

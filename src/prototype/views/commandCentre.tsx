@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ExternalLink, X, MapPin, Layers, ShieldAlert, Network as NetworkIcon, Users } from "lucide-react";
-import { InvestigationMap } from "../../components/InvestigationMap";
+import { InvestigationMap, type MapStatus } from "../../components/InvestigationMap";
 import { useProtoMapStore, useProtoStore, focusEntityOnMap } from "../store";
 import { entities, entityById, netCounts, potentialLinks, degreeOf, type ProtoEntity } from "../data";
 import { EntityGlyph, Tag } from "../components";
@@ -25,6 +25,9 @@ export function CommandCentre() {
   const setFlag = useProtoStore((s) => s.setFlag);
   const flagSet = useProtoStore((s) => s.flagSet);
   const [openDecision, setOpenDecision] = useState(false);
+  const [mapStatus, setMapStatus] = useState<MapStatus>("initializing");
+
+  const mapEngineTone = mapStatus === "ready" ? "green" : mapStatus === "degraded" ? "amber" : "default";
 
   useEffect(() => {
     const s = mapStore.getState();
@@ -56,11 +59,25 @@ export function CommandCentre() {
   return (
     <div className="pt-cc-wrap">
       <div className="pt-cc-map">
-        <InvestigationMap store={mapStore} />
+        <InvestigationMap store={mapStore} onStatus={setMapStatus} />
       </div>
 
       {/* left HUD */}
       <aside className="pt-hud" aria-label="Command centre controls">
+        <div className="pt-hud-panel" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="pt-hud-kicker">
+            <span>MAP ENGINE</span>
+            <span className={`pt-chip pt-chip-${mapEngineTone}`} style={{ height: 20, padding: "0 7px", fontSize: 8.5, letterSpacing: "0.16em" }}>
+              {mapStatus === "ready" ? "READY" : mapStatus.toUpperCase()}
+            </span>
+          </div>
+          <div className="pt-flex" style={{ gap: 6, rowGap: 4 }}>
+            <span className="pt-chip pt-chip-cyan" style={{ height: 20, padding: "0 7px", fontSize: 8.5 }}>VECTOR DATA</span>
+            <span className="pt-chip" style={{ height: 20, padding: "0 7px", fontSize: 8.5 }}>3D TERRAIN</span>
+            <span className="pt-chip" style={{ height: 20, padding: "0 7px", fontSize: 8.5 }}>THREE OVERLAY</span>
+          </div>
+        </div>
+
         <div className="pt-hud-panel">
           <div className="pt-hud-kicker">
             <span>THREAT FILTERS</span>
