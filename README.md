@@ -3,7 +3,7 @@
 **Product:** CRIA - Criminal Relationship Intelligence & Analytics  
 **Descriptor:** Investigative Intelligence Platform  
 **Project:** CRIA (SIH 2026 showcase prototype) — the showcase product identity of SECRET  
-**Repository:** `stackht/AI-Criminal-Network-Analysis-Runtime-Sync-`  
+**Repository:** `stackht/CRIA`  
 **Status:** Production-polish standalone demo with React frontend, deterministic synthetic intelligence corpus, MapLibre-based 3D command centre, network analytics visualization, analyst decision flow, and a synthetic evidence integrity ledger.
 
 > **PROTOTYPE • SYNTHETIC DATA** — every entity, case, location, transaction, call record and relationship in this application is fictional. No real criminal information is used. This repository contains only the showcase experience and the minimum runtime it needs; the full production SECRET application (backend, case intake, reports, live API) is a separate product and is not part of this repository.
