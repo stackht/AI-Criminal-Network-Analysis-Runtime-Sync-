@@ -7,11 +7,22 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
+// MapLibre v6 resolves its worker via an internal `new URL(..., import.meta.url)`
+// that Vite never emits — the browser then requests a missing
+// `/assets/maplibre-gl-worker.mjs` and Cloudflare's SPA fallback answers with
+// HTML, killing the map. Routing the worker through Vite's `?worker&url`
+// pipeline makes Vite emit a real, hashed JS worker asset in dist/ and wire the
+// correct URL via setWorkerUrl.
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import * as THREE from "three";
 import type { Map as MapLibreMap, MapMouseEvent, IControl, MapGeoJSONFeature, CustomRenderMethodInput } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMapStore } from "../store/mapStore";
 import type { CaseMarker } from "../types";
+
+// Must run before any MapLibre Map is constructed.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
+console.log("[CRIA MAP] worker url", maplibreWorkerUrl);
 
 const INDIA_CENTER: [number, number] = [78.9629, 20.5937];
 const INDIA_BOUNDS: [[number, number], [number, number]] = [[67, 6.5], [98, 37.2]];
@@ -579,6 +590,13 @@ function createThreeIntelOverlay(): ThreeIntelOverlay {
       renderer.setClearColor(0x000000, 0);
       camera = new THREE.Camera();
       animationStart = performance.now();
+      map.getCanvas().addEventListener("webglcontextlost", (event) => {
+        event.preventDefault();
+        console.error("[CRIA MAP] THREE.JS FAILURE — WebGL context lost on shared map canvas");
+      }, false);
+      map.getCanvas().addEventListener("webglcontextrestored", () => {
+        console.log("[CRIA MAP] THREE.JS OVERLAY — WebGL context restored");
+      }, false);
     },
     render(gl, input: CustomRenderMethodInput) {
       if (!renderer || !camera || !origin || !meterScale) return;
@@ -731,7 +749,18 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
     reportStatus("initializing");
     mapLog("webgl " + (webglAvailable() ? "available" : "unavailable"));
     map.on("error", (event) => {
-      console.error("[CRIA MAP ERROR]", event.error ?? event);
+      const raw = event.error instanceof Error ? event.error : typeof event.error === "string" ? new Error(event.error) : event.error;
+      const message = String(raw instanceof Error ? raw.message : event?.error ?? event);
+      let category = "MAP ERROR";
+      if (/worker/i.test(message)) category = "WORKER FAILURE";
+      else if (/style|glyph|sprite/i.test(message)) category = "STYLE FAILURE";
+      else if (/tile|source|fetch|network|parse/i.test(message)) category = "VECTOR TILE FAILURE";
+      else if (/webgl|context/i.test(message)) category = "WEBGL FAILURE";
+      if (category === "WORKER FAILURE") {
+        console.error("[CRIA MAP] WORKER FAILURE — MapLibre failed to load its web worker. Check that dist contains the Vite-emitted worker asset and that the server serves it as JavaScript, not HTML.", message);
+      } else {
+        console.error(`[CRIA MAP] ${category}`, raw ?? event);
+      }
       if (!webglAvailable()) reportStatus("degraded");
     });
     const applyMarkersToStyle = () => {
