@@ -28,12 +28,13 @@ export function CommandCentre() {
   const [mapStatus, setMapStatus] = useState<MapStatus>("initializing");
   const [sheet, setSheet] = useState<"entity" | "index" | null>(null);
 
-  const mapEngineTone = mapStatus === "ready" ? "green" : mapStatus === "degraded" ? "amber" : "default";
+  const mapEngineTone = ["ready", "basemap-ready", "cria-ready", "three-ready"].includes(mapStatus) ? "green" : mapStatus === "degraded" ? "amber" : "default";
 
   useEffect(() => {
     const s = mapStore.getState();
+    // Reveal the case's markers but keep the constructor's configured initial
+    // view — no cinematic camera animation on startup.
     s.selectCase("CASE-2026-041");
-    s.requestCamera("fit-all");
     s.selectEntity(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

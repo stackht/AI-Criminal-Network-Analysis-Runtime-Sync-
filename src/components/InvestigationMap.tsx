@@ -57,13 +57,33 @@ function styleAvailable(map: MapLibreMap): boolean {
 
 /**
  * Lightweight map engine status surfaced to the Command Centre HUD. */
-export type MapStatus = "initializing" | "style-loading" | "ready" | "degraded";
+export type MapStatus =
+  | "initializing"
+  | "style-loading"
+  | "style-ready"
+  | "basemap-ready"
+  | "cria-ready"
+  | "three-ready"
+  | "ready"
+  | "degraded";
 
 const CRIA_MAP_TAG = "[CRIA MAP]";
 
 function mapLog(message: string, detail?: unknown) {
   if (detail === undefined) console.debug(CRIA_MAP_TAG, message);
   else console.debug(CRIA_MAP_TAG, message, detail);
+}
+
+const isDev = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV === true;
+
+/** Development-only startup performance marks (never fire in production). */
+function devMark(name: string) {
+  if (!isDev || typeof performance === "undefined" || typeof performance.mark !== "function") return;
+  performance.mark(`cria-map-${name}`);
+  const t0 = performance.getEntriesByName("cria-map-init")[0];
+  if (t0 && typeof performance.measure === "function") {
+    try { performance.measure(`cria-${name}`, "cria-map-init", `cria-map-${name}`); } catch { /* single-measure */ }
+  }
 }
 
 /** WebGL is probed on a throwaway canvas so we never steal MapLibre's context. */
@@ -249,10 +269,10 @@ class OrbitControl implements IControl {
   }
 }
 
-/** Phase 1 — lightweight: case/location/route data layers + data source.
- * Cheap and independent of the 3D building tiles, so the investigative
- * basemap can paint before heavier work. */
-function addBaseCRIALayers(map: MapLibreMap) {
+/** Phase 2 — case + location markers (the investigative core). Cheap and
+ * independent of routes/labels/3D, so intelligence markers paint right after
+ * the basemap. */
+function addCaseLocationLayers(map: MapLibreMap) {
   map.setLight({
     anchor: "viewport",
     color: "#b8dcff",
@@ -261,27 +281,6 @@ function addBaseCRIALayers(map: MapLibreMap) {
   });
 
   if (!map.getSource("secret-data")) map.addSource("secret-data", { type: "geojson", data: featureCollection([]) });
-  if (!map.getLayer("secret-route-glass")) {
-    map.addLayer({
-      id: "secret-route-glass", type: "line", source: "secret-data", filter: ["==", ["get", "kind"], "route"],
-      layout: { visibility: "visible", "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#d94a5f", "line-width": 12, "line-opacity": 0.06, "line-blur": 6 },
-    });
-  }
-  if (!map.getLayer("secret-route-frost")) {
-    map.addLayer({
-      id: "secret-route-frost", type: "line", source: "secret-data", filter: ["==", ["get", "kind"], "route"],
-      layout: { visibility: "visible", "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": ["get", "routeColor"], "line-width": 7, "line-opacity": 0.16, "line-blur": 2.2 },
-    });
-  }
-  if (!map.getLayer("secret-routes")) {
-    map.addLayer({
-      id: "secret-routes", type: "line", source: "secret-data", filter: ["==", ["get", "kind"], "route"],
-      layout: { visibility: "visible", "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": ["get", "routeColor"], "line-width": 1.8, "line-opacity": 0.82 },
-    });
-  }
   if (!map.getLayer("secret-cases")) {
     map.addLayer({
       id: "secret-cases", type: "circle", source: "secret-data", filter: ["==", ["get", "kind"], "case"],
@@ -307,17 +306,42 @@ function addBaseCRIALayers(map: MapLibreMap) {
       },
     }, "secret-cases");
   }
+  if (!map.getLayer("secret-locations")) {
+    map.addLayer({
+      id: "secret-locations", type: "circle", source: "secret-data", filter: ["==", ["get", "kind"], "location"],
+      paint: { "circle-radius": ["case", ["get", "selected"], 7, 4], "circle-color": ["get", "color"], "circle-stroke-color": "#dff8ff", "circle-stroke-width": ["case", ["get", "selected"], 2, 1], "circle-opacity": 0.98 },
+    });
+  }
+}
+
+/** Phase 3 — routes + labels (secondary overlay). */
+function addRouteLabelLayers(map: MapLibreMap) {
+  if (!map.getLayer("secret-route-glass")) {
+    map.addLayer({
+      id: "secret-route-glass", type: "line", source: "secret-data", filter: ["==", ["get", "kind"], "route"],
+      layout: { visibility: "visible", "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#d94a5f", "line-width": 12, "line-opacity": 0.06, "line-blur": 6 },
+    });
+  }
+  if (!map.getLayer("secret-route-frost")) {
+    map.addLayer({
+      id: "secret-route-frost", type: "line", source: "secret-data", filter: ["==", ["get", "kind"], "route"],
+      layout: { visibility: "visible", "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": ["get", "routeColor"], "line-width": 7, "line-opacity": 0.16, "line-blur": 2.2 },
+    });
+  }
+  if (!map.getLayer("secret-routes")) {
+    map.addLayer({
+      id: "secret-routes", type: "line", source: "secret-data", filter: ["==", ["get", "kind"], "route"],
+      layout: { visibility: "visible", "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": ["get", "routeColor"], "line-width": 1.8, "line-opacity": 0.82 },
+    });
+  }
   if (!map.getLayer("secret-case-labels")) {
     map.addLayer({
       id: "secret-case-labels", type: "symbol", source: "secret-data", filter: ["==", ["get", "kind"], "case"],
       layout: { "text-field": "", "text-font": ["Noto Sans Regular"], "text-size": ["interpolate", ["linear"], ["zoom"], 2, 9, 8, 10.5, 14, 12], "text-offset": [0, 2.15], "text-anchor": "top", "text-allow-overlap": true, "text-letter-spacing": 0.04 },
       paint: { "text-color": "#f4fbff", "text-halo-color": "#050b14", "text-halo-width": 2, "text-opacity": 0.98 },
-    });
-  }
-  if (!map.getLayer("secret-locations")) {
-    map.addLayer({
-      id: "secret-locations", type: "circle", source: "secret-data", filter: ["==", ["get", "kind"], "location"],
-      paint: { "circle-radius": ["case", ["get", "selected"], 7, 4], "circle-color": ["get", "color"], "circle-stroke-color": "#dff8ff", "circle-stroke-width": ["case", ["get", "selected"], 2, 1], "circle-opacity": 0.98 },
     });
   }
   if (!map.getLayer("secret-location-labels")) {
@@ -523,6 +547,19 @@ function buildData(markers: CaseMarker[], showCases: boolean, showLocations: boo
   return featureCollection(features);
 }
 
+/** Memoized GeoJSON: identical inputs return the same FeatureCollection so we
+ * never rebuild the whole dataset for unrelated toggles/selection changes. */
+const geojsonCache = new Map<string, GeoJSON.FeatureCollection>();
+function buildDataCached(markers: CaseMarker[], showCases: boolean, showLocations: boolean, showRoutes: boolean, selectedCaseId: string | null, selectedLocationId: string | null): GeoJSON.FeatureCollection {
+  const key = `${markers.length}:${showCases}:${showLocations}:${showRoutes}:${selectedCaseId ?? ""}:${selectedLocationId ?? ""}`;
+  const cached = geojsonCache.get(key);
+  if (cached) return cached;
+  const fc = buildData(markers, showCases, showLocations, showRoutes, selectedCaseId, selectedLocationId);
+  if (geojsonCache.size > 16) geojsonCache.clear();
+  geojsonCache.set(key, fc);
+  return fc;
+}
+
 function fitAll(map: MapLibreMap, markers: CaseMarker[]) {
   const locations = markers.flatMap((marker) => marker.locations);
   const cameraPadding = { top: 120, bottom: 120, left: 120, right: 120 };
@@ -712,6 +749,7 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
     }
     mapRef.current = map;
     if (typeof window !== "undefined") {
+      devMark("init");
       console.log("[CRIA VIEWPORT]", {
         innerWidth: window.innerWidth,
         innerHeight: window.innerHeight,
@@ -836,7 +874,7 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
     const applyMarkersToStyle = () => {
       const st = store.getState();
       const ds = map.getSource("secret-data") as maplibregl.GeoJSONSource | undefined;
-      ds?.setData(buildData(st.markers, st.showCases, st.showLocations, st.showRoutes, st.selectedCaseId, st.selectedLocationId));
+      ds?.setData(buildDataCached(st.markers, st.showCases, st.showLocations, st.showRoutes, st.selectedCaseId, st.selectedLocationId));
       if (map.getLayer("secret-location-labels")) map.setLayoutProperty("secret-location-labels", "visibility", st.showLabels && st.showLocations ? "visible" : "none");
       ["secret-route-glass", "secret-route-frost", "secret-routes"].forEach((layerId) => { if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", st.showRoutes ? "visible" : "none"); });
     };
@@ -854,6 +892,8 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
 // style JSON is available; CRIA data layers and 3D buildings follow, and the
 // Three.js overlay is added last and never blocks map availability.
     const phaseBase = { done: false };
+    const phaseCria = { done: false };
+    const phaseRoutes = { done: false };
     const phaseBuildings = { done: false };
     const phaseThree = { done: false };
     let recoloredStyle: unknown = null;
@@ -887,54 +927,76 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
         });
       }
     };
-    const ensureCRIALayers = () => {
-      if (!styleAvailable(map)) return;
-      if (!styleLogged) {
-        styleLogged = true;
-        console.log("[CRIA MAP] style loaded");
+    let styleMarksLogged = false;
+    const logStyleMarks = () => {
+      if (styleMarksLogged) return;
+      styleMarksLogged = true;
+      devMark("style-ready");
+      if (isDev && typeof performance !== "undefined") {
+        const rows: { from: string; to: string; ms: string }[] = [];
+        for (const name of ["style-ready", "basemap-ready", "cria-ready", "three-ready"]) {
+          try {
+            const m = performance.measure(`cria-dur-${name}`, "cria-map-init")?.duration;
+            if (m !== undefined) rows.push({ from: "map-init", to: name, ms: m.toFixed(0) });
+          } catch { /* not measured yet */ }
+        }
+        if (rows.length) console.log("[CRIA MAP] STARTUP", rows);
       }
-      applyGlobeSelection();
-      // Phase 1 — recolour once + CRIA data layers: basemap becomes usable.
-      if (!phaseBase.done) {
-        const vectorSource = ensureVectorSource(map);
-        if (!vectorSource) {
-          console.error("[CRIA MAP] VECTOR TILE FAILURE — building vector source unavailable");
-          reportStatus("degraded");
-          return;
-        }
-        if (!vectorSourceLogged) {
-          vectorSourceLogged = true;
-          console.log(`[CRIA MAP] vector source found: ${vectorSource}`);
-        }
-        if (!debugBasemap) {
-          recolorOnce();
-          addBaseCRIALayers(map);
-          applyMarkersToStyle();
-        }
-        setReady(true);
-        syncCinematicZoom();
-        reportStatus("ready");
-        console.log("[CRIA MAP] BASEMAP READY — CRIA data layers loaded");
-        phaseBase.done = true;
-        // One-shot recalibration after the shell settles (entrance animation).
-        window.setTimeout(() => { try { map.resize(); } catch { /* noop */ } }, 0);
-        if (debugBasemap) {
-          console.log("[CRIA MAP] BASEMAP-ONLY DEBUG MODE — CRIA layers + Three.js disabled");
-          return;
-        }
+    };
+    /** Phase 1 — minimum work for a usable dark basemap (paint only). */
+    const initializeBaseMap = () => {
+      if (phaseBase.done) return;
+      const vs = ensureVectorSource(map);
+      if (!vs) {
+        console.error("[CRIA MAP] VECTOR TILE FAILURE — building vector source unavailable");
+        reportStatus("degraded");
+        return;
       }
-      // Phase 2 — 3D building layers (guarded, cheap to add).
-      if (!phaseBuildings.done) {
-        const vs = ensureVectorSource(map);
-        if (vs) {
-          addBuildingLayers(map, vs);
-          phaseBuildings.done = true;
-          console.log("[CRIA MAP] 3D buildings layers added");
-        }
+      if (!vectorSourceLogged) {
+        vectorSourceLogged = true;
+        console.log(`[CRIA MAP] vector source found: ${vs}`);
       }
-      // Phase 3 — Three.js intelligence overlay, deferred and non-fatal.
-      if (!phaseThree.done) {
-        window.setTimeout(() => {
+      if (!debugBasemap) recolorOnce();
+      setReady(true);
+      syncCinematicZoom();
+      reportStatus("basemap-ready");
+      console.log("[CRIA MAP] BASEMAP READY");
+      devMark("basemap-ready");
+      phaseBase.done = true;
+      // One-shot recalibration after the shell settles (entrance animation).
+      window.setTimeout(() => { try { map.resize(); } catch { /* noop */ } }, 0);
+    };
+    /** Phase 2 — case + location intelligence markers. */
+    const initializeCRIALayers = () => {
+      if (phaseCria.done || debugBasemap) return;
+      addCaseLocationLayers(map);
+      applyMarkersToStyle();
+      console.log("[CRIA MAP] CRIA layers loaded");
+      devMark("cria-ready");
+      reportStatus("cria-ready");
+      phaseCria.done = true;
+    };
+    /** Phase 3 — routes + labels (secondary overlay). */
+    const initializeRoutesLabels = () => {
+      if (phaseRoutes.done || debugBasemap) return;
+      addRouteLabelLayers(map);
+      devMark("routes-ready");
+      phaseRoutes.done = true;
+    };
+    /** Phase 4 — 3D building extrusion (zoom-gated by layer minzoom). */
+    const initializeBuildings = () => {
+      if (phaseBuildings.done) return;
+      const vs = ensureVectorSource(map);
+      if (!vs) return;
+      addBuildingLayers(map, vs);
+      phaseBuildings.done = true;
+      console.log("[CRIA MAP] 3D buildings layers added");
+    };
+    /** Phase 5 — Three.js intelligence overlay, deferred and non-fatal. */
+    const initializeThreeOverlay = () => {
+      if (phaseThree.done) return;
+      window.setTimeout(() => {
+        if (!phaseThree.done) {
           if (!debugNoThree && !map.getLayer(threeOverlay.id)) {
             try {
               map.addLayer(threeOverlay);
@@ -944,8 +1006,24 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
             }
           }
           phaseThree.done = true;
-        }, 0);
+          devMark("three-ready");
+          if (isDev) logStyleMarks();
+          reportStatus("ready");
+        }
+      }, 0);
+    };
+    const ensureCRIALayers = () => {
+      if (!styleAvailable(map)) return;
+      if (!styleLogged) {
+        styleLogged = true;
+        console.log("[CRIA MAP] style loaded");
       }
+      applyGlobeSelection();
+      initializeBaseMap();
+      initializeCRIALayers();
+      initializeRoutesLabels();
+      initializeBuildings();
+      initializeThreeOverlay();
     };
     const onLocationClick = (event: MapMouseEvent) => {
       const feature = eventFeatures(event)[0];
@@ -1073,7 +1151,7 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
     const map = mapRef.current;
     if (!map || !ready) return;
     const source = map.getSource("secret-data") as maplibregl.GeoJSONSource | undefined;
-    source?.setData(buildData(markers, showCases, showLocations, showRoutes, selectedCaseId, selectedLocationId));
+    source?.setData(buildDataCached(markers, showCases, showLocations, showRoutes, selectedCaseId, selectedLocationId));
     if (map.getLayer("secret-location-labels")) map.setLayoutProperty("secret-location-labels", "visibility", showLabels && showLocations ? "visible" : "none");
     ["secret-route-glass", "secret-route-frost", "secret-routes"].forEach((layerId) => { if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", showRoutes ? "visible" : "none"); });
   }, [markers, showCases, showLocations, showRoutes, showLabels, selectedCaseId, selectedLocationId, ready]);
