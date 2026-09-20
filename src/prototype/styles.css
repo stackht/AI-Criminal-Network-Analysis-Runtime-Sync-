@@ -423,7 +423,27 @@
 
 /* ------------------------------------------------------------- command centre */
 .pt-cc-wrap { position: relative; height: 100%; }
-.pt-cc-map { position: absolute; inset: 0; }
+.pt-cc-map { position: absolute; inset: 0; overflow: hidden; }
+/* Map host shell sizing — the standalone style set owns these because the
+   production stylesheet is not part of this repository. Without them the
+   MapLibre canvas collapses to its 300px default instead of filling the
+   theatre. */
+.pt-cc-map .globe-shell { position: absolute; inset: 0; }
+.pt-cc-map .globe-canvas-host,
+.pt-cc-map .globe-shell canvas { position: absolute !important; inset: 0 !important; pointer-events: auto; }
+.pt-cc-map .globe-canvas-host { width: 100%; height: 100%; }
+.pt-cc-map .globe-scanlines { position: absolute; inset: 0; background: repeating-linear-gradient(180deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 4px); opacity: 0.14; mix-blend-mode: screen; pointer-events: none; }
+.pt-cc-map .globe-vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, transparent 62%, rgba(4,6,10,0.5) 100%); }
+.pt-cc-map .map-tooltip { position: fixed; z-index: 40; pointer-events: none; min-width: 210px; padding: 12px 14px; border-radius: 10px; background: rgba(13,17,23,0.92); border: 1px solid rgba(86,217,255,0.28); box-shadow: 0 14px 34px rgba(0,0,0,0.45); backdrop-filter: blur(10px); color: var(--pt-text); }
+.pt-cc-map .map-tooltip-title { font: 600 12px/1.2 "IBM Plex Mono", monospace; letter-spacing: 0.05em; margin-bottom: 8px; color: var(--pt-text); }
+.pt-cc-map .map-tooltip-row { display: flex; justify-content: space-between; gap: 14px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font: 600 9.5px/1.2 "IBM Plex Mono", monospace; letter-spacing: 0.12em; }
+.pt-cc-map .map-tooltip-row:last-child { border-bottom: none; }
+.pt-cc-map .map-tooltip-row span { color: var(--pt-muted); text-transform: uppercase; }
+.pt-cc-map .map-tooltip-row strong { color: var(--pt-cyan); }
+.pt-cc-map .map-tooltip-priority { color: var(--pt-amber); }
+.pt-cc-map .map-tooltip-kicker { color: var(--pt-violet); font: 700 9px/1.2 "IBM Plex Mono", monospace; letter-spacing: 0.16em; margin-bottom: 6px; }
+.pt-cc-map .map-tooltip-entities { margin-top: 8px; color: var(--pt-muted); font-size: 10px; }
+.pt-cc-map .map-selected-case { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 4; font: 600 10px/1 "IBM Plex Mono", monospace; letter-spacing: 0.18em; color: var(--pt-cyan); padding: 8px 14px; border: 1px solid rgba(86,217,255,0.3); border-radius: 6px; background: rgba(13,17,23,0.8); backdrop-filter: blur(8px); }
 .pt-hud {
   position: absolute;
   top: 14px;
