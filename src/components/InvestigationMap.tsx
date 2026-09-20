@@ -687,6 +687,20 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
       (window as unknown as { __criaMap?: MapLibreMap }).__criaMap = map;
     }
     mapRef.current = map;
+    if (typeof window !== "undefined") {
+      console.log("[CRIA VIEWPORT]", {
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        documentWidth: document.documentElement.clientWidth,
+        documentHeight: document.documentElement.clientHeight,
+        bodyWidth: document.body.clientWidth,
+        bodyHeight: document.body.clientHeight,
+      });
+    }
+    const resizeObserver = new ResizeObserver(() => {
+      try { map.resize(); } catch { /* container mid-layout */ }
+    });
+    if (hostRef.current) resizeObserver.observe(hostRef.current);
     const threeOverlay = createThreeIntelOverlay();
     threeOverlayRef.current = threeOverlay;
     // Use finer, more responsive zoom steps while retaining MapLibre's eased motion.
@@ -890,6 +904,9 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
       setReady(true);
       syncCinematicZoom();
       reportStatus("ready");
+      // Recalibrate once after the shell settles — entrance animations can
+      // leave MapLibre sized to a mid-transition container on small screens.
+      window.setTimeout(() => { try { map.resize(); } catch { /* noop */ } }, 0);
     };
     const onLocationClick = (event: MapMouseEvent) => {
       const feature = eventFeatures(event)[0];
@@ -987,6 +1004,7 @@ export function InvestigationMap({ store = useMapStore, onStatus }: { store?: ty
     map.on("mouseleave", "secret-locations", onLeave);
     map.on("mouseleave", "secret-cases", onLeave);
     return () => {
+      resizeObserver.disconnect();
       stopBootPoll();
       window.clearTimeout(bootPollTimeout);
       window.clearTimeout(watchdog);

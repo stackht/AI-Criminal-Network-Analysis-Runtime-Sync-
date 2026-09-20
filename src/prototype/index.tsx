@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutDashboard, Globe2, Network as NetworkIcon, Users, Fingerprint, Clock3, FlaskConical, ShieldCheck, X, ChevronRight, ChevronLeft } from "lucide-react";
+import { LayoutDashboard, Globe2, Network as NetworkIcon, Users, Fingerprint, Clock3, FlaskConical, ShieldCheck, X, ChevronRight, ChevronLeft, Search as SearchIcon, Menu as MenuIcon } from "lucide-react";
 import "./styles.css";
 import { caseTitle, caseKey, PROTOTYPE_LABEL } from "./data";
 import { PROTOTYPE_BRAND, BRAND_TITLE } from "./brand";
@@ -55,6 +55,7 @@ export function PrototypeApp() {
   const tourRunning = useProtoStore((s) => s.tourRunning);
   const setTourRunning = useProtoStore((s) => s.setTourRunning);
   const [clock, setClock] = useState(() => new Date());
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     const t = window.setInterval(() => setClock(new Date()), 1000);
@@ -124,8 +125,12 @@ export function PrototypeApp() {
             >
               DEMO MODE
             </button>
-            <button type="button" className="pt-header-btn" onClick={() => setPaletteOpen(true)} title="Command palette (Ctrl+K)">
-              ⌘K
+            <button type="button" className="pt-header-btn" onClick={() => setPaletteOpen(true)} aria-label="Search" title="Search (Ctrl+K)">
+              <SearchIcon size={14} />
+              <span className="pt-search-label">SEARCH</span>
+            </button>
+            <button type="button" className="pt-header-btn pt-header-menu" onClick={() => setNavOpen(true)} aria-label="Open navigation" title="Menu">
+              <MenuIcon size={16} />
             </button>
           </div>
         </header>
@@ -177,6 +182,49 @@ export function PrototypeApp() {
 
       <AnimatePresence>
         {tourRunning && <TourGuide />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {navOpen && (
+          <motion.div
+            className="pt-drawer-backdrop"
+            onClick={() => setNavOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.14 }}
+          >
+            <motion.aside
+              className="pt-drawer"
+              aria-label="Navigation"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: "spring", duration: 0.34, bounce: 0.15 }}
+            >
+              <div className="pt-drawer-head">
+                <div className="pt-drawer-brand">
+                  <span className="pt-brand-mark">{PROTOTYPE_BRAND.mark}</span>
+                  <span className="pt-drawer-brand-name">{PROTOTYPE_BRAND.name}</span>
+                </div>
+                <button type="button" className="pt-header-btn" onClick={() => setNavOpen(false)} aria-label="Close navigation">
+                  <X size={15} />
+                </button>
+              </div>
+              {NAV.map((n) => (
+                <button
+                  key={n.view}
+                  type="button"
+                  className={`pt-drawer-item ${view === n.view || (n.view === "entities" && view === "entity") ? "active" : ""}`}
+                  onClick={() => { setView(n.view); setNavOpen(false); }}
+                >
+                  {n.icon}
+                  <span>{n.label}</span>
+                </button>
+              ))}
+            </motion.aside>
+          </motion.div>
+        )}
       </AnimatePresence>
       <AnimatePresence>
         <CommandPalette />
