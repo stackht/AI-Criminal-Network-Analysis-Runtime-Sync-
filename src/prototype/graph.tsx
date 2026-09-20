@@ -192,9 +192,9 @@ export function ForceGraph({
               <line
                 key={r.id}
                 x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                stroke={edgeActive ? "var(--pt-rose)" : "rgba(120,140,170,0.42)"}
+                stroke={edgeActive ? "var(--pt-rose)" : "rgba(88,78,120,0.32)"}
                 strokeWidth={edgeActive ? 2 : 1}
-                opacity={dimmed ? 0.1 : 0.62}
+                opacity={dimmed ? 0.08 : 0.6}
                 vectorEffect="non-scaling-stroke"
               />
             );
@@ -241,9 +241,9 @@ export function ForceGraph({
 
 export function NodeShape({ type, size, selected, neighbor, dimmed }: { type: string; size: number; selected: boolean; neighbor: boolean; dimmed: boolean }) {
   const shape = nodeShape(type);
-  const strokeColor = selected ? "var(--pt-cyan)" : neighbor ? "rgba(155,140,255,0.85)" : "rgba(232,238,247,0.35)";
+  const strokeColor = selected ? "var(--pt-cyan)" : neighbor ? "rgba(101,70,216,0.85)" : "rgba(23,21,42,0.4)";
   const r = size / 2;
-  const fill = `color-mix(in srgb, ${nodeColor(type)} 78%, #10141c)`;
+  const fill = `color-mix(in srgb, ${nodeColor(type)} 82%, #ffffff)`;
   const common = {
     fill,
     stroke: strokeColor,

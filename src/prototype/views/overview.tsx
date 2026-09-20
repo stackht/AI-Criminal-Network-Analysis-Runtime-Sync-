@@ -28,15 +28,15 @@ function NetworkStructureVisual() {
     <div className="pt-vis" style={{ width: "100%" }}>
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Network structure by community">
         {dots.map((d) => (
-          <line key={`l${d.c}`} x1={cx} y1={cy} x2={d.x} y2={d.y} stroke="rgba(255,255,255,0.12)" />
+          <line key={`l${d.c}`} x1={cx} y1={cy} x2={d.x} y2={d.y} stroke="rgba(70,48,168,0.16)" />
         ))}
-        <circle cx={cx} cy={cy} r={8} fill="var(--pt-cyan)" />
-        <text x={cx} y={cy + 3} textAnchor="middle" fontSize={7} fill="#061218" style={{ fontFamily: "'IBM Plex Mono',monospace", pointerEvents: "none" }}>HUB</text>
+        <circle cx={cx} cy={cy} r={8} fill="var(--cria-primary)" />
+        <text x={cx} y={cy + 3} textAnchor="middle" fontSize={7} fill="#ffffff" style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600, pointerEvents: "none" }}>HUB</text>
         {dots.map((d) => (
           <g key={`g${d.c}`}>
-            <circle cx={d.x} cy={d.y} r={7 + Math.min(14, counts[d.c - 1] * 0.9)} fill={communityColor(d.c)} opacity={0.9} />
-            <circle cx={d.x} cy={d.y} r={10 + Math.min(14, counts[d.c - 1] * 0.9)} fill="none" stroke={communityColor(d.c)} opacity={0.35} />
-            <text x={d.x} y={d.y + 3} textAnchor="middle" fontSize={8} fill="#090b0e" style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600, pointerEvents: "none" }}>{counts[d.c - 1]}</text>
+            <circle cx={d.x} cy={d.y} r={7 + Math.min(14, counts[d.c - 1] * 0.9)} fill={communityColor(d.c)} opacity={0.95} />
+            <circle cx={d.x} cy={d.y} r={10 + Math.min(14, counts[d.c - 1] * 0.9)} fill="none" stroke={communityColor(d.c)} opacity={0.4} />
+            <text x={d.x} y={d.y + 3} textAnchor="middle" fontSize={8} fill="#ffffff" style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, pointerEvents: "none" }}>{counts[d.c - 1]}</text>
             <text x={d.x} y={d.y + 22} textAnchor="middle" fontSize={8} fill="var(--pt-faint)" style={{ fontFamily: "'IBM Plex Mono',monospace", pointerEvents: "none" }}>C{d.c}</text>
           </g>
         ))}
